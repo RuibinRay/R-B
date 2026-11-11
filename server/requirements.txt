@@ -1,0 +1,11 @@
+# R&B separation server (Python 3.9+). ffmpeg must be on PATH to read MP3/M4A uploads.
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+demucs==4.0.1
+# Demucs 4.0.1 saves stems through torchaudio's built-in writers, which changed in torchaudio 2.9.
+torch>=2.1,<2.9
+torchaudio>=2.1,<2.9
+soundfile>=0.12
+# PyTorch builds older than 2.3 (the newest available for Intel Macs) need NumPy 1.x.
+numpy<2; python_version < "3.13"

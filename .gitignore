@@ -1,0 +1,8 @@
+node_modules
+dist
+.taste-skill
+server/.venv
+server/__pycache__
+public/samples
+*.local
+.DS_Store
