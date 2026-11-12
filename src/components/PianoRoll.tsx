@@ -26,6 +26,12 @@ export interface PianoRollProps {
   getPlayhead?: () => number | null;
   onSeek?: (beat: number) => void;
   backdrop?: { buffer: AudioBuffer; offsetSec: number; bpm: number } | null;
+  /** A measured pitch line drawn over the grid: fractional MIDI per step, 0 = no pitch. */
+  contour?: { startBeat: number; stepBeat: number; midi: Float32Array } | null;
+  /** Notes to outline as "worth checking". */
+  flagged?: Set<string>;
+  /** Select this note and bring it into view (change `nonce` to repeat for the same note). */
+  focus?: { id: string; nonce: number } | null;
   advanced?: boolean;
   toolbar?: ReactNode;
 }
@@ -89,11 +95,30 @@ export function PianoRoll(props: PianoRollProps) {
     const ns = props.notes;
     const mid = ns.length ? ns.map((n) => n.pitch).sort((a, b) => a - b)[ns.length >> 1] : 62;
     view.current.sx = 0;
-    view.current.sy = drum ? 0 : (TOP - mid) * ROW - gridH / 2;
+    if (drum) {
+      // show the rows that have hits (kick, snare and hi-hat sit at the bottom of the list)
+      const used = ns.map((n) => rowOf(n.pitch)).filter((r) => r >= 0);
+      view.current.sy = used.length ? ((Math.min(...used) + Math.max(...used) + 1) / 2) * ROW - gridH / 2 : 0;
+    } else view.current.sy = (TOP - mid) * ROW - gridH / 2;
     clampView();
     dirty.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.viewKey, gridH > 0]);
+
+  useEffect(() => {
+    const f = props.focus;
+    const n = f && props.notes.find((k) => k.id === f.id);
+    if (!n) return;
+    setSel(new Set([n.id]));
+    const v = view.current;
+    const x = n.start * v.ppb - v.sx;
+    if (x < 20 || x > gridW - 60) v.sx = Math.max(0, n.start * v.ppb - gridW / 3);
+    const y = rowOf(n.pitch) * ROW - v.sy;
+    if (y < ROW || y > gridH - ROW * 2) v.sy = rowOf(n.pitch) * ROW - gridH / 2;
+    clampView();
+    dirty.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.focus?.id, props.focus?.nonce]);
 
   const noteAt = (x: number, y: number): Note | null => {
     const beat = xToBeat(x), row = yToRow(y);
@@ -109,7 +134,7 @@ export function PianoRoll(props: PianoRollProps) {
   const draw = (playhead: number | null) => {
     const canvas = canvasRef.current;
     if (!canvas || size.w < 10 || size.h < 10) return;
-    const { notes, length, color, timeSig, musicKey, range, backdrop } = P.current;
+    const { notes, length, color, timeSig, musicKey, range, backdrop, contour, flagged } = P.current;
     const { ppb } = view.current;
     const W = size.w, H = size.h;
     const ctx = fitCanvas(canvas, W, H);
@@ -163,7 +188,28 @@ export function PianoRoll(props: PianoRollProps) {
       ctx.fill();
       ctx.globalAlpha = 1;
       if (selected.has(n.id)) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke(); }
+      else if (flagged?.has(n.id)) {
+        // a note the detector was unsure about: amber dashed outline
+        ctx.strokeStyle = '#f2b33d'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 2]); ctx.stroke(); ctx.setLineDash([]);
+      }
       if (!drum && w > 30) { ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillText(midiToName(n.pitch), x + 4, y + h / 2 + 0.5); }
+    }
+    // the pitch that was actually sung, over the notes it was turned into
+    if (contour && !drum) {
+      const i0 = Math.max(0, Math.floor((xToBeat(KEY_W) - contour.startBeat) / contour.stepBeat) - 1);
+      const i1 = Math.min(contour.midi.length - 1, Math.ceil((b1 - contour.startBeat) / contour.stepBeat) + 1);
+      const every = Math.max(1, Math.floor(1.2 / (contour.stepBeat * ppb))); // no more than about one point per pixel
+      ctx.strokeStyle = 'rgba(79,195,232,0.95)'; ctx.lineWidth = 1.25; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      let pen = false;
+      for (let i = i0; i <= i1; i += every) {
+        const m = contour.midi[i];
+        if (!(m > 0)) { pen = false; continue; }
+        const x = beatToX(contour.startBeat + i * contour.stepBeat), y = gridTop + (TOP - m) * ROW - view.current.sy + ROW / 2;
+        if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        pen = true;
+      }
+      ctx.stroke();
     }
     const d = drag.current;
     if (d?.kind === 'marquee') {

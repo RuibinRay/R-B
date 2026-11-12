@@ -24,7 +24,7 @@ interface LiveTrack {
 export type InstrumentStatus = 'loading' | 'ready' | 'fallback';
 export type EngineEvent = { type: 'ended' } | { type: 'instrument'; id: string; status: InstrumentStatus };
 
-export interface SeqNote { pitch: number; time: number; duration: number; velocity: number; bend?: number[] }
+export interface SeqNote { pitch: number; time: number; duration: number; velocity: number; bend?: number[]; dyn?: number[]; legato?: boolean }
 export interface SeqPart { instrumentId: string; notes: SeqNote[]; gain?: number }
 export interface SeqHandle { stop(): void; position(): number; duration: number }
 
@@ -183,7 +183,8 @@ class Engine {
           if (n.start < 0 || n.start >= clip.length) continue;
           const dur = Math.min(n.duration, clip.length - n.start) * spb;
           const { pitch, velocity, bend } = n;
-          this.eventIds.push(tr.schedule((time) => lt.voice?.play(pitch, dur, time, velocity, bend), `${Math.round((clip.start + n.start) * ppq)}i`));
+          const expr = n.legato || n.dyn ? { legato: n.legato, dyn: n.dyn } : undefined;
+          this.eventIds.push(tr.schedule((time) => lt.voice?.play(pitch, dur, time, velocity, bend, expr), `${Math.round((clip.start + n.start) * ppq)}i`));
         }
       } else {
         const f = this.fades.get(clip.id);
@@ -407,7 +408,7 @@ class Engine {
         const v = voices[k];
         while (idx[k] < notes.length && notes[idx[k]].time < horizon) {
           const n = notes[idx[k]++];
-          v?.play(n.pitch, n.duration, t0 + n.time, Math.min(1, n.velocity * (parts[k].gain ?? 1)), n.bend);
+          v?.play(n.pitch, n.duration, t0 + n.time, Math.min(1, n.velocity * (parts[k].gain ?? 1)), n.bend, n.legato || n.dyn ? { legato: n.legato, dyn: n.dyn } : undefined);
         }
       });
       if (raw.currentTime - t0 > duration + 0.3) { handle.stop(); onEnd?.(); }

@@ -10,6 +10,8 @@ export interface Note {
   duration: number; // beats
   velocity: number; // 0..1
   bend?: number[]; // optional pitch contour in cents, evenly spaced over the note
+  dyn?: number[]; // optional loudness contour (1 = the note's own level), evenly spaced
+  legato?: boolean; // slurred from the note before: played without a new attack
 }
 
 interface ClipBase {

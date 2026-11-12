@@ -62,7 +62,7 @@ export async function renderProject(p: Project, buffers: Map<ID, AudioBuffer>, o
             const t = t0 + n.start * spb;
             if (t >= endSec) continue;
             const dur = Math.min(n.duration, clip.length - n.start) * spb;
-            voice.play(n.pitch, Math.min(dur, endSec - t), t, n.velocity, n.bend);
+            voice.play(n.pitch, Math.min(dur, endSec - t), t, n.velocity, n.bend, n.legato || n.dyn ? { legato: n.legato, dyn: n.dyn } : undefined);
           }
         } else {
           const buf = buffers.get(clip.assetId);

@@ -373,6 +373,24 @@ table.table { width: 100%; border-collapse: collapse; }
 .arrow-row svg { width: 16px; height: 16px; color: var(--faint); transition: transform 0.15s var(--ease), color 0.15s; flex: none; }
 .arrow-row:hover svg.go { transform: translateX(3px); color: #fff; }
 .stepper { display: flex; gap: 6px; flex-wrap: wrap; }
+.voice-modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.voice-mode { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--rule); background: none; color: var(--text); }
+.voice-mode .name { font-size: 13px; font-weight: 500; }
+.voice-mode .meta { font-size: 12px; line-height: 16px; color: var(--faint); }
+.voice-mode:hover:not(:disabled) { background: var(--raised); }
+.voice-mode.on { background: var(--nested); border-color: var(--violet); }
+.voice-mode:disabled { opacity: 0.55; }
+.voice-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; padding: 14px 16px 12px; }
+.voice-bar .play-btn { align-self: center; }
+.voice-strength { width: 90px; }
+.voice-review { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 16px; border-top: 1px solid var(--rule); background: #100f0a; font-size: 13px; }
+.voice-review-text { min-width: 180px; color: var(--muted); }
+.voice-review-text b { color: var(--text); font-weight: 600; }
+.voice-layer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 0; border-top: 1px solid var(--rule); }
+.voice-layer:first-child { border-top: 0; padding-top: 0; }
+.voice-layer .select.grow { min-width: 130px; }
+.voice-layer .voice-level { width: 84px; }
+.voice-layer .meta { flex-basis: 100%; font-size: 12px; line-height: 17px; color: var(--faint); }
 .wave-box { width: 100%; border-radius: 8px; background: var(--ground); }
 .stem { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--rule); }
 .stem:first-child { border-top: 0; }

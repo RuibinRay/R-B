@@ -11,9 +11,15 @@ export interface Voice {
   noteOn(midi: number, time: number, velocity: number): void;
   noteOff(midi: number, time: number): void;
   /** One complete note with a known length (seconds). `bend` is a pitch contour in cents. */
-  play(midi: number, duration: number, time: number, velocity: number, bend?: number[]): void;
+  play(midi: number, duration: number, time: number, velocity: number, bend?: number[], expr?: Expression): void;
   releaseAll(): void;
   dispose(): void;
+}
+
+/** How a note is shaped beyond pitch and velocity (used by sampled instruments). */
+export interface Expression {
+  legato?: boolean; // joined to the note before it: no fresh attack
+  dyn?: number[]; // loudness contour over the note, 1 = its own level
 }
 
 type Raw = BaseAudioContext;
@@ -44,7 +50,7 @@ class SampleVoice implements Voice {
     return best;
   }
 
-  private begin(midi: number, time: number, velocity: number, bend?: number[], duration?: number): Live {
+  private begin(midi: number, time: number, velocity: number, bend?: number[], duration?: number, expr?: Expression): Live {
     const z = this.zoneFor(midi);
     const src = this.raw.createBufferSource();
     src.buffer = z.buffer;
@@ -62,12 +68,32 @@ class SampleVoice implements Voice {
         src.playbackRate.linearRampToValueAtTime(rate * Math.pow(2, bend[i] / 1200), time + i * step);
       }
     }
+    // A slurred note on a bowed or blown instrument has no attack of its own: it fades in
+    // over the tail of the note before, and playback starts past the sample's own bow
+    // scrape or breath puff. Only looped (sustaining) samples can do this.
+    const legato = !!expr?.legato && !!z.loopEnd;
+    const attack = legato ? Math.max(this.attack, 0.06) : this.attack;
+    const peak = Math.pow(Math.max(0.02, velocity), 1.4);
+    const dyn = expr?.dyn && expr.dyn.length > 1 && duration ? expr.dyn : null;
     const g = this.raw.createGain();
     g.gain.setValueAtTime(0, time);
-    g.gain.linearRampToValueAtTime(Math.pow(Math.max(0.02, velocity), 1.4), time + this.attack);
-    src.connect(g);
+    g.gain.linearRampToValueAtTime(peak * (dyn ? dyn[0] : 1), time + attack);
+    if (dyn && duration) {
+      // the singer's swells and fades inside the note
+      const step = duration / (dyn.length - 1);
+      for (let i = 1; i < dyn.length; i++) if (i * step > attack + 0.01) g.gain.linearRampToValueAtTime(peak * dyn[i], time + i * step);
+    }
+    // Softly played notes are not only quieter but darker, as on the real instruments.
+    if (velocity < 0.9) {
+      const tone = this.raw.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.Q.value = 0.5;
+      tone.frequency.value = Math.min(18000, 350 * Math.pow(2, velocity * 6));
+      src.connect(tone);
+      tone.connect(g);
+    } else src.connect(g);
     Tone.connect(g as never, this.output);
-    src.start(time);
+    src.start(time, legato ? Math.min(0.09, z.loopStart ?? 0.09) : 0);
     const v: Live = { src, g, t0: time, done: false };
     src.onended = () => {
       g.disconnect();
@@ -97,8 +123,8 @@ class SampleVoice implements Voice {
     if (v) this.end(v, time);
   }
 
-  play(midi: number, duration: number, time: number, velocity: number, bend?: number[]): void {
-    this.end(this.begin(midi, time, velocity, bend, duration), time + duration);
+  play(midi: number, duration: number, time: number, velocity: number, bend?: number[], expr?: Expression): void {
+    this.end(this.begin(midi, time, velocity, bend, duration, expr), time + duration);
   }
 
   releaseAll(): void {

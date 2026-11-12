@@ -1,14 +1,20 @@
 import { toMono } from '../wav';
+import { resample } from './resample';
 import type { DetectedNote } from './pitch';
 
 // Spotify Basic Pitch (Apache-2.0) running in the browser through TensorFlow.js.
 // The model weights are served from /models/basic-pitch and loaded on first use,
 // so the heavy ML bundle is only downloaded when someone actually transcribes.
 
+// The library and the model weights are fetched once and kept: analysing a second
+// recording (or the same one again) does not download or build the network again.
+type Lib = typeof import('@spotify/basic-pitch');
+let loaded: Promise<{ lib: Lib; model: InstanceType<Lib['BasicPitch']> }> | null = null;
+const load = () => (loaded ??= import('@spotify/basic-pitch').then((lib) => ({ lib, model: new lib.BasicPitch(`${import.meta.env.BASE_URL}models/basic-pitch/model.json`) })).catch((e) => { loaded = null; throw e; }));
+
 export async function basicPitchDetect(buffer: AudioBuffer, onProgress?: (fraction: number) => void): Promise<DetectedNote[]> {
-  const { BasicPitch, outputToNotesPoly, addPitchBendsToNoteEvents, noteFramesToTime } = await import('@spotify/basic-pitch');
-  const audio = toMono(buffer, 22050); // the model expects 22.05 kHz mono
-  const model = new BasicPitch(`${import.meta.env.BASE_URL}models/basic-pitch/model.json`);
+  const { lib: { outputToNotesPoly, addPitchBendsToNoteEvents, noteFramesToTime }, model } = await load();
+  const audio = resample(toMono(buffer), buffer.sampleRate, 22050); // the model expects 22.05 kHz mono
   const frames: number[][] = [], onsets: number[][] = [], contours: number[][] = [];
   await model.evaluateModel(
     audio,

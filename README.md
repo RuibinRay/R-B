@@ -21,6 +21,8 @@ Other commands:
 | `npm run preview` | Serves the built site locally |
 | `npm run fetch-samples` | Optional. Copies the instrument samples into `public/samples` so the site needs no CDN |
 | `npm run copy-model` | Re-copies the Basic Pitch model into `public/models` (already done) |
+| `npm test` | Runs the automated tests of the detection, articulation and arrangement code |
+| `npm run bench` | Prints transcription accuracy (old version against new), speed and memory |
 
 Use a recent Chrome, Edge, Firefox or Safari. Recording needs `https://` or `localhost`.
 
@@ -59,12 +61,8 @@ The front end looks for the server at `http://localhost:8000`; change it on the 
   (draw, move, resize, copy, combine, quantize, transpose, velocity), drum step grid, on-screen
   keyboard and drum pads playable from the computer keyboard, chord creator with arpeggios, scale
   assistant, live note recording.
-- **Voice to Instrument** – record or upload humming, singing or tapping. A YIN pitch tracker (and,
-  optionally, Spotify's Basic Pitch model running in the browser) converts it to editable notes next
-  to the original waveform; rhythm-only recordings are detected by onsets and mapped to kick, snare
-  and hi-hat. Tempo and key are estimated, timing can be kept natural or quantized, pitch bends can be
-  replayed, and rule-based chords, bass, drums and harmony can be added before sending it all to the
-  studio.
+- **Voice to Instrument** – record or upload humming, singing, whistling or beatboxing and get it
+  back as editable notes played by instruments. See [Voice to Instrument in detail](#voice-to-instrument-in-detail).
 - **AI Stem Separator** – 2, 4 or 6 stems with Demucs; synchronized waveforms with mute, solo,
   volume, pan and download per stem; send stems to the open project or a new remix project.
 - **Production Studio** – multitrack timeline for audio and MIDI clips (move, trim, split, duplicate,
@@ -108,6 +106,85 @@ The front end looks for the server at `http://localhost:8000`; change it on the 
   Advanced adds the compressor, gate, pitch shifter, master EQ/compressor, fade handles, finer grids,
   velocity lane, clip transposing and the recording latency offset.
 
+### Voice to Instrument in detail
+
+What it is: **transcription plus performance**. Your recording is turned into notes (MIDI), and the
+notes are played by the app's sampled and synthesized instruments. It is *not* neural audio-to-audio
+timbre conversion (the sound of your voice is not itself reshaped into a violin); that would need a
+separate model and, realistically, a server with a GPU. Everything here runs in the browser and the
+recording never leaves the device.
+
+**Detection.** "Decide for me" measures the recording and picks a detector:
+
+| The recording is | Detector | How it is recognised |
+| --- | --- | --- |
+| One note at a time (humming, singing, whistling, a solo instrument) | Built-in pitch tracker | Most of the sounding time has one clear pitch |
+| Hits (beatboxing, tapping) | Onset detector | Little or no pitch, or sound that dies away right after each attack |
+| Several notes at once (chords, a played instrument) | Spotify Basic Pitch (TensorFlow.js, loaded on demand and cached) | Tonal sound without one consistent pitch |
+
+The pitch tracker is YIN with a best-path search: every 10 ms frame offers up to five candidate
+periods plus a spectral candidate for whistling, and the cheapest path through all frames is taken,
+which removes the octave slips a frame-by-frame choice makes. The recording is first resampled with
+a proper low-pass (so hi-hats and consonants do not fold down into the analysis band), high-passed
+at 55 Hz, and gated above the measured background level. Notes are then cut at silences, at lasting
+pitch changes (judged on a vibrato-flattened contour) and at re-articulations: a deep dip in level,
+or a shallow one that coincides with a fresh attack in the spectrum, so repeated notes on one pitch
+stay separate while vibrato does not shatter a long note. Slides into a note are attached to it.
+Each note keeps its pitch contour (slides, vibrato), its loudness and, for long notes, the swell
+inside it. Each also gets a confidence score; doubtful notes (unsteady, between two pitches, a lone
+octave leap, very short) are outlined in amber and can be stepped through, auditioned and fixed.
+
+Beatboxing is mapped to kick, snare, closed and open hi-hat. Besides fixed frequency limits, hits
+are grouped by brightness relative to each other, which keeps the mapping right on phone and laptop
+microphones that have no bass.
+
+Detection runs in a Web Worker with staged progress and can be cancelled.
+
+**Performance.** The detected line is adapted to what each instrument can do, in three modes.
+Nothing is invented: the rules only keep, reduce or drop what was sung.
+
+| | Clean | Natural | Expressive |
+| --- | --- | --- | --- |
+| Loudness between notes | Evened out | As sung | Slightly widened |
+| Piano, mallets | Plain notes | Loudness becomes key velocity; no bends (a piano cannot) | Same, with joined notes held to the next |
+| Guitar, bass, plucked | Plain notes that ring | Slides into notes kept, vibrato dropped, notes ring until the next | Full pitch movement up to ±1.5 semitones |
+| Violin, cello, winds, brass, pads | Separate strokes | Touching notes slurred (no new attack), 70% of slides and vibrato, half of the swells | All slides, vibrato and swells |
+
+In the sampler, a slurred note starts past the sample's own bow or breath attack and fades in over
+the previous note; a swell is applied as a gain curve; softer notes are slightly darker as well as
+quieter. A layer is moved by whole octaves when the melody does not fit the instrument's range.
+
+**Layers and accompaniment.** Any number of instruments can play the melody at once, each with its
+own level and octave, and each can be heard alone. Optional chords, bass, drums and a harmony line
+are written by music-theory rules (not generated by an AI model) from the detected key, in five
+styles and three intensities.
+
+**Editing and output.** Waveform, sung pitch line and notes share one time axis. Notes can be moved,
+resized, re-pitched and given a new loudness, with undo and redo; timing can be pulled towards a
+grid by a chosen strength; "Your recording / Instrument / Both" switches instantly while playing.
+The result can be added to the open project, opened as a new project, or downloaded as WAV or MIDI
+(MIDI notes cannot carry the slides and swells, so those are left out of the file).
+
+**Measured.** `npm run bench` runs synthetic recordings with known answers through the previous
+detector and the current one:
+
+| Test set | Before | Now |
+| --- | --- | --- |
+| 17 sung, hummed and whistled recordings (clean, noisy, vibrato, scoops, slides, fast, low, breathy, flat, repeated notes), average note F1 | 90% | 100% |
+| Whistling, C6 and up | 27% | 100% |
+| Soft repeated notes on one pitch | 29% | 100% |
+| Weak fundamental (octave trap) | 80% | 100% |
+| Beatbox, full-range microphone | 100% | 100% |
+| Beatbox, phone microphone | 63% | 100% |
+| Beatbox with open hi-hats | 88% | 100% |
+| Beatbox, quiet hi-hats in noise | 88% | 88% |
+
+Note onsets are within about 30 ms on average. A two-minute 44.1 kHz recording is analysed in
+about 6 seconds in Node on the development machine (about 20 times faster than real time) with
+at most about 15 MB of extra memory (the figure moves with garbage collection); in the browser an 11-second take took 0.6 s. These are synthetic test
+signals: they are built to be awkward in the ways real takes are, but real voices, rooms and
+microphones are harder, so expect lower accuracy in practice and use the review tools.
+
 ### Keyboard shortcuts (Studio and Composer)
 
 `Space` play/stop · `Enter` back to start · `R` record · `L` loop · `K` metronome · `M` marker ·
@@ -127,8 +204,12 @@ In the Composer, `A`–`;` play notes and `Z`/`X` change octave (toggle with "Co
   drawbar organs rendered as seamless loops, PADsynth pads and noise-based effects.
 - `src/video` – video registry and thumbnails, the frame compositor shared by preview and export,
   and the WebCodecs MP4 exporter.
-- `src/lib/dsp` – pitch tracking, onset/tempo detection, the Basic Pitch wrapper, pitch correction,
+- `src/lib/dsp` – pitch tracking, onset/tempo detection, the detection pipeline and its worker
+  (`analyze*.ts`), resampling, the Basic Pitch wrapper, pitch correction,
   time-stretching. `src/audio/clipProcess.ts` applies the last two to a clip.
+- `src/lib/articulate.ts`, `src/lib/voiceArrange.ts` – instrument articulation rules and the
+  layer/accompaniment arranger behind Voice to Instrument.
+- `tests/` – Vitest suites with synthetic singers and beatboxers, and the benchmark.
 - `src/lib/mix.ts` – the group and crossfade rules, shared by playback, export and the timeline.
 - `src/lib` – music theory, arrangement rules, loudness (ITU-R BS.1770), WAV/MP3/MIDI encoding,
   IndexedDB persistence, the project file format.
@@ -164,6 +245,17 @@ on the AI Stem Separator page).
 - Songs are capped at five minutes.
 - Transcription and separation are estimates. Expect some wrong notes and audible artifacts and fix
   them by hand; the editors are built for that.
+- Voice to Instrument transcribes and re-performs; it does not convert the timbre of the voice
+  itself. The pitch tracker follows one note at a time; chords need the Basic Pitch model, which
+  gives no confidence scores or review marks. Choosing between melody, rhythm and chords
+  automatically is a heuristic and can be overridden. Noise handling is a high-pass filter and a
+  level gate, not spectral denoising. Beatbox sounds other than kick, snare and hi-hat (toms,
+  claps, scratches) are mapped to the nearest of those. Instrument realism is limited by the
+  sample set: one sample layer per note, so a soft piano note is the loud one played quieter and
+  slightly darker, and there are no recorded legato transitions, pizzicato or other articulations.
+- The automated tests cover the detection, articulation and arrangement code. Sound output of the
+  sampler was checked by measuring offline renders in the browser, not by an automated test, and
+  nothing was judged by ear or tried with a real microphone.
 - Sampled instruments are 3-second General MIDI samples; sustained instruments are looped. Erhu,
   guzheng, pipa and ukulele are approximated with the closest sample in the set (labelled in the
   library). If samples cannot be downloaded, a synthesized stand-in plays instead.

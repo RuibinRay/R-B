@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.mjs",
+    "test": "vitest run",
+    "bench": "vitest run tests/benchmark.test.ts --reporter=verbose",
     "copy-model": "node scripts/copy-model.mjs",
     "fetch-samples": "node scripts/fetch-samples.mjs"
   },
@@ -32,6 +34,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.8"
+    "vite": "^8.3.8",
+    "vitest": "^3.2.7"
   }
 }
