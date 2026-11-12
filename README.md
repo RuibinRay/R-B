@@ -101,7 +101,9 @@ The front end looks for the server at `http://localhost:8000`; change it on the 
 - **Export** – WAV (16/24-bit) or MP3 of the full mix with optional loudness normalization and a
   peak ceiling, stems per track, MIDI file, and a single-file project backup (`.rnb`).
 - **My Projects** – autosave, open, duplicate, delete, import/export project files, import MIDI,
-  six templates (Pop, Rock, Electronic, Lo-fi, Orchestral, Cinematic).
+  eight templates. Six are eight-bar starters (Pop, Rock, Electronic, Lo-fi, Orchestral, Cinematic);
+  two are complete arrangements: a one-minute Hip-hop beat (swung boom-bap drums, 808, piano hook)
+  and a Techno track with intro, groove, breakdown, an eight-bar build with a riser, and a drop.
 - **Beginner / Advanced** modes – Beginner shows plain explanations and the essential controls;
   Advanced adds the compressor, gate, pitch shifter, master EQ/compressor, fade handles, finer grids,
   velocity lane, clip transposing and the recording latency offset.
@@ -200,6 +202,8 @@ In the Composer, `A`–`;` play notes and `Z`/`X` change octave (toggle with "Co
   synthesis, clip playback and the recorder (an AudioWorklet in `public/recorder-worklet.js`) are
   written directly on the Web Audio API. `render.ts` rebuilds the *same* graph in an
   `OfflineAudioContext`, so an export is exactly the timeline, instruments, effects and mix you hear.
+  It renders one track at a time, and each instrument a few seconds of notes at a time, which keeps
+  long, dense songs exportable (a 100-second, 13-track song renders in roughly half a minute).
 - `src/audio/models.ts` – the modeled instruments: Karplus-Strong strings, additive bells and bars,
   drawbar organs rendered as seamless loops, PADsynth pads and noise-based effects.
 - `src/video` – video registry and thumbnails, the frame compositor shared by preview and export,
