@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && node scripts/deploy.mjs",
     "test": "vitest run",
+    "train": "vite-node scripts/train-beats.ts --",
     "bench": "vitest run tests/benchmark.test.ts --reporter=verbose",
     "copy-model": "node scripts/copy-model.mjs",
     "fetch-samples": "node scripts/fetch-samples.mjs"

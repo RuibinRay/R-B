@@ -68,6 +68,14 @@ function prepare(src: AudioBuffer, sustain: boolean): Zone['buffer'] & { __loop?
   return out;
 }
 
+function isSilent(b: AudioBuffer): boolean {
+  for (let c = 0; c < b.numberOfChannels; c++) {
+    const d = b.getChannelData(c);
+    for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i]) > 0.001) return false;
+  }
+  return true;
+}
+
 const loaded = new Map<string, Zone[]>();
 const pending = new Map<string, Promise<Zone[]>>();
 const failed = new Set<string>();
@@ -113,7 +121,9 @@ export function loadZones(def: InstrumentDef): Promise<Zone[]> {
           return loop ? { midi, buffer, loopStart: loop[0], loopEnd: loop[1] } : { midi, buffer };
         }),
       );
-      const zones = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : [])).sort((a, b) => a.midi - b.midi);
+      // A few files in the sample set are silent (the double bass above B3, the very top of
+      // the string sections). Leave those out so the nearest audible sample is used instead.
+      const zones = results.flatMap((r) => (r.status === 'fulfilled' && !isSilent(r.value.buffer) ? [r.value] : [])).sort((a, b) => a.midi - b.midi);
       if (!zones.length) {
         failed.add(def.id);
         throw new Error(`No samples could be loaded for ${def.name}`);

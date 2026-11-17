@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clapperboard, FolderOpen, House, Layers, Library as LibraryIcon, Menu as MenuIcon, Mic, Piano, SlidersHorizontal, X } from 'lucide-react';
+import { Clapperboard, FlaskConical, FolderOpen, House, Layers, Library as LibraryIcon, Menu as MenuIcon, Mic, Piano, SlidersHorizontal, X } from 'lucide-react';
 import { engine } from './audio/engine';
 import { putProject } from './lib/db';
 import { clipEnd } from './lib/music';
@@ -8,6 +8,7 @@ import { A, navigate, setUI, toast, useStore, type Page } from './store/store';
 import { ExportDialog } from './components/ExportDialog';
 import { typingKeySet } from './components/Keys';
 import { Toasts } from './components/ui';
+import { BeatLab } from './pages/BeatLab';
 import { Composer } from './pages/Composer';
 import { Home } from './pages/Home';
 import { Library } from './pages/Library';
@@ -20,6 +21,7 @@ import { Voice } from './pages/Voice';
 const NAV: { page: Page; label: string; icon: typeof House }[] = [
   { page: 'home', label: 'Home', icon: House },
   { page: 'composer', label: 'Music Composer', icon: Piano },
+  { page: 'beatlab', label: 'AI Beat Lab', icon: FlaskConical },
   { page: 'voice', label: 'Voice to Instrument', icon: Mic },
   { page: 'stems', label: 'AI Stem Separator', icon: Layers },
   { page: 'studio', label: 'Production Studio', icon: SlidersHorizontal },
@@ -128,7 +130,7 @@ export default function App() {
   }, []);
 
   // Stop the transport when leaving the pages that own it.
-  useEffect(() => { if (page === 'voice' || page === 'stems') A.stop(); }, [page]);
+  useEffect(() => { if (page === 'voice' || page === 'stems' || page === 'beatlab') A.stop(); }, [page]);
 
   const go = (p: Page) => { navigate(p); setMenu(false); };
   const title = NAV.find((n) => n.page === page)?.label ?? 'R&B';
@@ -173,6 +175,7 @@ export default function App() {
           <>
             {page === 'home' && <Home />}
             {page === 'composer' && <Composer />}
+            {page === 'beatlab' && <BeatLab />}
             {page === 'voice' && <Voice />}
             {page === 'stems' && <Stems />}
             {page === 'studio' && <Studio />}

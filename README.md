@@ -21,6 +21,7 @@ Other commands:
 | `npm run preview` | Serves the built site locally |
 | `npm run fetch-samples` | Optional. Copies the instrument samples into `public/samples` so the site needs no CDN |
 | `npm run copy-model` | Re-copies the Basic Pitch model into `public/models` (already done) |
+| `npm run train` | Trains the AI Beat Lab on every style and saves `src/lib/beatmaker/learned.json` |
 | `npm test` | Runs the automated tests of the detection, articulation and arrangement code |
 | `npm run bench` | Prints transcription accuracy (old version against new), speed and memory |
 
@@ -61,6 +62,11 @@ The front end looks for the server at `http://localhost:8000`; change it on the 
   (draw, move, resize, copy, combine, quantize, transpose, velocity), drum step grid, on-screen
   keyboard and drum pads playable from the computer keyboard, chord creator with arpeggios, scale
   assistant, live note recording.
+- **AI Beat Lab** – pick a style (trap, boom bap, drill, techno, house, synthwave, lo-fi, ambient,
+  or game music: chiptune, adventure, battle, cozy) and it writes three different beats, as an 8-bar
+  loop or a full song with sections. Each can be played, rated, bred further ("more like this"),
+  downloaded as WAV or opened in the studio as normal tracks. See
+  [AI Beat Lab in detail](#ai-beat-lab-in-detail).
 - **Voice to Instrument** – record or upload humming, singing, whistling or beatboxing and get it
   back as editable notes played by instruments. See [Voice to Instrument in detail](#voice-to-instrument-in-detail).
 - **AI Stem Separator** – 2, 4 or 6 stems with Demucs; synchronized waveforms with mute, solo,
@@ -107,6 +113,49 @@ The front end looks for the server at `http://localhost:8000`; change it on the 
 - **Beginner / Advanced** modes – Beginner shows plain explanations and the essential controls;
   Advanced adds the compressor, gate, pitch shifter, master EQ/compressor, fade handles, finer grids,
   velocity lane, clip transposing and the recording latency offset.
+
+### AI Beat Lab in detail
+
+What it is: a **search-and-critic system that learns by experiment**, not a neural network trained
+on recordings, and it says so on the page. It works in four layers:
+
+1. **Style knowledge** (`src/lib/beatmaker/knowledge.ts`), written from producer guides for FL
+   Studio, Ableton and GarageBand-style workflows and from mixing practice: tempo ranges, swing,
+   half-time feel, drum templates per style (which sixteenths usually carry kick, snare and hats),
+   chord progressions, candidate instruments per part, bass and chord playing styles, how repetitive
+   the style is, the target balance of the spectrum and of the parts, and song forms (intro, verse,
+   hook, breakdown, build, drop, outro).
+2. **A measured sound model** (`profiles.json`). Every one of the 104 instruments it may choose was
+   rendered through the app's own engine and measured: loudness, energy in seven frequency bands, how
+   long a note rings. It then **listened to its own beats**: it rendered the parts of 36 of them,
+   compared real loudness and spectrum with its predictions, and stored a correction per instrument
+   (`calibrate.ts`). On 24 beats it had not seen, that cut the spectrum prediction error by about
+   20%. Its level predictions were within about 2 dB before correction (median).
+3. **Twelve critics** (`critics.ts`) judge each beat from 0 to 1, with a reason: tempo for the style,
+   drum groove against the style's templates and backbeat, kick and bass (locked together for trap,
+   kept apart for house), notes in key and melody on chord tones, semitone clashes and muddy low
+   notes, melody shape (steps, leaps that recover, range, density), repetition against variation,
+   frequency balance against the style, masking (too many parts in one band), mix balance, register
+   (bass low, melody on top) and, for songs, whether the energy follows the planned arrangement. Each
+   part's fader is set by gain staging from the measured loudness, as an engineer would.
+4. **Learning by trial and error** (`learn.ts`). A population of beats is bred for many generations:
+   the critics score each, the best survive, the rest are mutated and crossed. After each round the
+   best beats are taken apart one decision at a time (swap only the lead instrument, only the bass
+   style, ...) and every version is judged; how much each option gained over the alternatives in the
+   same beat is recorded, also for instrument pairs. New beats are drawn with a preference for what
+   measured well. Your thumbs-up and thumbs-down are recorded per decision too, so it drifts towards
+   your taste. The page shows what it has learned per style.
+
+`npm run train` trains every style (about two minutes; `ROUNDS=20 npm run train -- trap` for more on
+one style) and writes `learned.json`, which ships with the app. "Train more" on the page continues
+in the browser; that and your ratings stay in that browser.
+
+Measured on the shipped training (10 rounds per style, about 7,500 beats each): the average craft
+score of beats drawn from the learned preferences rose above that of beats drawn without them in
+every style, and bred beats reach 0.93-0.98 against 0.78-0.85 for random ones (the exact numbers are
+printed by `npm run train`). Those are the critics' scores. They measure craft that can be checked:
+whether the beat follows its style, grooves, stays in key, avoids clashes and is balanced. They do
+not measure whether it is catchy or moving, and no listening test with people has been done.
 
 ### Voice to Instrument in detail
 
@@ -211,6 +260,9 @@ In the Composer, `A`–`;` play notes and `Z`/`X` change octave (toggle with "Co
 - `src/lib/dsp` – pitch tracking, onset/tempo detection, the detection pipeline and its worker
   (`analyze*.ts`), resampling, the Basic Pitch wrapper, pitch correction,
   time-stretching. `src/audio/clipProcess.ts` applies the last two to a clip.
+- `src/lib/beatmaker/` – the AI Beat Lab: style knowledge, genome and composer, critics, learning,
+  measured instrument profiles and their calibration, and the Web Worker the page uses.
+  `scripts/train-beats.ts` is the trainer.
 - `src/lib/articulate.ts`, `src/lib/voiceArrange.ts` – instrument articulation rules and the
   layer/accompaniment arranger behind Voice to Instrument.
 - `tests/` – Vitest suites with synthetic singers and beatboxers, and the benchmark.
@@ -245,6 +297,14 @@ To run the server somewhere else, build with `VITE_API_URL` set to its address (
 on the AI Stem Separator page).
 
 ## Known limits
+
+- The AI Beat Lab composes from rules, measurements and search, inside the app's own instrument
+  library: one sample layer per note and no audio mastering beyond the master chain, so its beats
+  sound like well-arranged demos rather than commercially produced records. Its melodies come from a
+  short two-bar idea that is repeated, answered and resolved, not from a learned model of melody. Its
+  sound model predicts the spectrum of a mix only roughly (a mean error of 0.27 in band shares on
+  unseen beats, on a scale where 2 would be completely wrong). A neural music model (for example
+  ACE-Step) would be needed for audio that sounds produced, and that needs a GPU server.
 
 - Songs are capped at five minutes.
 - Transcription and separation are estimates. Expect some wrong notes and audible artifacts and fix

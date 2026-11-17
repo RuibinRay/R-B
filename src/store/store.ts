@@ -13,8 +13,8 @@ import { createFromTemplate, createProject } from '../lib/templates';
 import { encodeWav, toPcm } from '../lib/wav';
 import { probeVideo, registerVideo } from '../video/video';
 
-export type Page = 'home' | 'composer' | 'voice' | 'stems' | 'studio' | 'video' | 'projects' | 'library';
-export const PAGES: Page[] = ['home', 'composer', 'voice', 'stems', 'studio', 'video', 'projects', 'library'];
+export type Page = 'home' | 'composer' | 'beatlab' | 'voice' | 'stems' | 'studio' | 'video' | 'projects' | 'library';
+export const PAGES: Page[] = ['home', 'composer', 'beatlab', 'voice', 'stems', 'studio', 'video', 'projects', 'library'];
 export type BottomPanel = 'editor' | 'mixer' | 'fx' | 'master';
 export interface Toast { id: string; kind: 'info' | 'error' | 'success'; text: string }
 
