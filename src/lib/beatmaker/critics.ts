@@ -231,6 +231,53 @@ export function review(c: Composition): Review {
     add('arrangement', 'Arrangement', 0.7 * clamp01((corr + 0.2) / 1.2) + 0.3 * within(contrast, 4, 14, 6), 1, `energy follows the plan ${pct(clamp01(corr))}; ${contrast.toFixed(0)} dB from quietest to loudest section`);
   }
 
+  // 13. drum dynamics: accents and soft notes, as the drum programming guides teach
+  if (drums && genre.drums) {
+    const hats = drums.notes.filter((n) => n.pitch === 42);
+    const onBeat = hats.filter((n) => Math.abs(n.start - Math.round(n.start)) < 0.03).map((n) => n.velocity);
+    const offBeat = hats.filter((n) => Math.abs(n.start - Math.round(n.start)) >= 0.03).map((n) => n.velocity);
+    const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+    const vel = hats.map((n) => n.velocity);
+    const spread = vel.length > 1 ? Math.sqrt(mean(vel.map((v) => (v - mean(vel)) ** 2))) : 0;
+    const accent = onBeat.length && offBeat.length ? mean(onBeat) - mean(offBeat) : 0.15;
+    const backs = drums.notes.filter((n) => n.pitch === 38 || n.pitch === 39);
+    const ghostsOk = backs.length < 2 || Math.min(...backs.map((n) => n.velocity)) < 0.7 * Math.max(...backs.map((n) => n.velocity)) || genre.drums.ghosts < 0.1;
+    const score = 0.45 * within(spread, 0.08, 0.3, 0.08) + 0.4 * within(accent, 0.1, 0.45, 0.12) + 0.15 * (ghostsOk ? 1 : 0.4);
+    add('dynamics', 'Drum dynamics', score, 0.8, `hi-hat loudness varies by ${pct(spread)}; beats are ${pct(Math.max(0, accent))} louder than off-beats${hats.length ? '' : ' (no hi-hats)'}`);
+  }
+
+  // 14. the hook: a melody you can remember repeats its rhythm, has one clear peak and comes home
+  if (lead && lead.notes.length >= 4) {
+    const ns = [...lead.notes].sort((a, b) => a.start - b.start);
+    const rhythmOf = (bar: number) => new Set(ns.filter((n) => Math.floor(n.start / BAR) === bar).map((n) => Math.round((n.start - bar * BAR) * 4)));
+    const bars = [...new Set(ns.map((n) => Math.floor(n.start / BAR)))];
+    let same = 0, pairs2 = 0;
+    for (const b of bars) {
+      if (!bars.includes(b + 2)) continue;
+      const A = rhythmOf(b), B = rhythmOf(b + 2);
+      same += [...A].filter((x) => B.has(x)).length / Math.max(1, new Set([...A, ...B]).size);
+      pairs2++;
+    }
+    const rhythmRepeat = pairs2 ? same / pairs2 : 0.5;
+    const top = Math.max(...ns.map((n) => n.pitch));
+    const peaks = ns.filter((n) => n.pitch === top).length / Math.max(1, Math.ceil(c.lengthBars / 4));
+    const last = ns[ns.length - 1];
+    const home = ((last.pitch - g.root) % 12 + 12) % 12;
+    const resolves = home === 0 ? 1 : home === 7 || home === 4 || home === 3 ? 0.7 : 0.3;
+    const syncopated = ns.filter((n) => Math.round(n.start * 4) % 2 === 1).length / ns.length;
+    const score = 0.4 * within(rhythmRepeat, 0.45, 0.95, 0.35) + 0.2 * within(peaks, 0.5, 2, 2) + 0.25 * resolves + 0.15 * within(syncopated, 0.05, 0.4, 0.25);
+    add('hook', 'Catchy hook', score, 1, `rhythm repeats ${pct(rhythmRepeat)} between call and answer; ${resolves === 1 ? 'ends on the home note' : resolves > 0.5 ? 'ends on a stable note' : 'ends unresolved'}; ${pct(syncopated)} of notes off the beat`);
+  }
+
+  // 15. transitions (songs): every new section is announced by a fill, roll, drop-out or crash
+  if (!loopLike && drums) {
+    const boundaries = c.sections.slice(1).map((s) => s.startBar * BAR);
+    const marked = boundaries.filter((t) => drums.notes.some((n) => (n.start >= t - 1 && n.start < t && (n.pitch === 38 || n.pitch === 41 || n.pitch === 45 || n.pitch === 48) && n.start - Math.floor(n.start) > 0.2)
+      || (Math.abs(n.start - t) < 0.05 && n.pitch === 49))
+      || !drums.notes.some((n) => n.start >= t - 0.5 && n.start < t)).length;
+    add('transitions', 'Transitions', boundaries.length ? marked / boundaries.length : 1, 0.8, `${marked} of ${boundaries.length} section changes are marked by a fill, a roll, a drop-out or a crash`);
+  }
+
   const wsum = verdicts.reduce((a, v) => a + v.weight, 0);
   const total = verdicts.reduce((a, v) => a + v.score * v.weight, 0) / wsum;
   return { total, verdicts, estimate: est };

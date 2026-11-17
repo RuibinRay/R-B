@@ -58,6 +58,21 @@ export interface Genre {
   levels: Partial<Record<Role, number>>;
   forms: SectionPlan[][];
   reverb: number; // how wet the style is, 0..1
+  /** Production habits from the tutorials (see README). All optional. */
+  habits?: Habits;
+}
+
+export interface Habits {
+  /** Duck bass, chords and pads on every kick, in dB (house and techno "pump"). */
+  sidechain?: number;
+  /** Small timing and loudness drift on the drums, as a player would have (0..1). */
+  humanize?: number;
+  /** How the end of a phrase is marked: a drum fill, a snare roll, a drop-out, or nothing. */
+  fill?: 'fill' | 'roll' | 'dropout' | 'none';
+  /** 808-style slides into some bass notes. */
+  slides?: boolean;
+  /** Loops must join end to start seamlessly (game music). */
+  seamless?: boolean;
 }
 
 export type BassStyle = 'follow-kick' | 'roots' | 'pulse8' | 'offbeat' | 'walking' | 'rumble' | 'arp' | 'glide';
@@ -103,6 +118,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.35, ['lead', 'pad', 'texture']), S('verse', 8, 0.8, ['drums', 'bass', 'chords', 'lead']), S('hook', 8, 1, all), S('verse', 8, 0.8, ['drums', 'bass', 'chords', 'arp']), S('hook', 8, 1, all)],
     ],
     reverb: 0.3,
+    habits: { fill: 'dropout', slides: true, humanize: 0.15 },
   },
   boombap: {
     id: 'boombap', name: 'Boom bap', family: 'rap', hint: 'Swung 90s drums, upright bass, dusty jazzy keys',
@@ -125,6 +141,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.35, ['chords', 'texture']), S('verse', 8, 0.8, ['drums', 'bass', 'chords', 'texture']), S('hook', 8, 1, ['drums', 'bass', 'chords', 'lead', 'texture']), S('verse', 8, 0.8, ['drums', 'bass', 'chords', 'arp', 'texture']), S('hook', 8, 1, ['drums', 'bass', 'chords', 'lead', 'pad', 'texture']), S('outro', 4, 0.3, ['chords', 'texture'])],
     ],
     reverb: 0.2,
+    habits: { fill: 'fill', humanize: 0.6 },
   },
   drill: {
     id: 'drill', name: 'Drill', family: 'rap', hint: 'Sliding 808s, offbeat snares, triplet hats, dark strings',
@@ -147,6 +164,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.3, ['chords', 'pad']), S('hook', 8, 1, all), S('verse', 8, 0.8, ['drums', 'bass', 'chords', 'arp']), S('hook', 8, 1, all), S('outro', 4, 0.3, ['chords', 'pad'])],
     ],
     reverb: 0.35,
+    habits: { fill: 'dropout', slides: true, humanize: 0.15 },
   },
   // ---- electronic ----------------------------------------------------------
   techno: {
@@ -170,6 +188,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 8, 0.4, ['drums', 'bass']), S('verse', 8, 0.7, ['drums', 'bass', 'arp']), S('break', 8, 0.35, ['pad', 'arp', 'texture']), S('build', 4, 0.6, ['drums', 'pad', 'arp', 'texture']), S('drop', 16, 1, ['drums', 'bass', 'chords', 'lead', 'arp', 'texture']), S('outro', 4, 0.4, ['drums', 'bass'])],
     ],
     reverb: 0.3,
+    habits: { sidechain: 7, fill: 'roll', humanize: 0.05 },
   },
   house: {
     id: 'house', name: 'House', family: 'electronic', hint: 'Four-on-the-floor, offbeat bass, piano or organ chords',
@@ -192,6 +211,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 8, 0.45, ['drums', 'bass']), S('verse', 8, 0.75, ['drums', 'bass', 'chords']), S('break', 4, 0.4, ['chords', 'pad']), S('drop', 16, 1, ['drums', 'bass', 'chords', 'lead', 'arp']), S('outro', 4, 0.45, ['drums', 'bass'])],
     ],
     reverb: 0.3,
+    habits: { sidechain: 6, fill: 'roll', humanize: 0.2 },
   },
   synthwave: {
     id: 'synthwave', name: 'Synthwave', family: 'electronic', hint: 'Eighties drums, pulsing bass, big pads and a saw lead',
@@ -214,6 +234,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.4, ['pad', 'arp']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'arp']), S('hook', 8, 1, ['drums', 'bass', 'chords', 'lead', 'arp', 'pad']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'arp']), S('hook', 8, 1, all), S('outro', 4, 0.4, ['pad', 'arp'])],
     ],
     reverb: 0.4,
+    habits: { sidechain: 3, fill: 'fill', humanize: 0.1 },
   },
   // ---- chill -----------------------------------------------------------------
   lofi: {
@@ -237,6 +258,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.35, ['chords', 'texture']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'texture']), S('hook', 8, 0.9, ['drums', 'bass', 'chords', 'lead', 'texture']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'arp', 'texture']), S('outro', 4, 0.35, ['chords', 'lead', 'texture'])],
     ],
     reverb: 0.35,
+    habits: { fill: 'fill', humanize: 0.8 },
   },
   ambient: {
     id: 'ambient', name: 'Ambient chill', family: 'chill', hint: 'Slow pads, soft piano or kalimba, nature sounds, no hard beat',
@@ -254,6 +276,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.3, ['chords', 'texture']), S('verse', 8, 0.6, ['bass', 'chords', 'lead', 'texture']), S('hook', 8, 0.8, ['bass', 'chords', 'lead', 'pad', 'arp', 'texture']), S('outro', 4, 0.3, ['chords', 'pad', 'texture'])],
     ],
     reverb: 0.7,
+    habits: { fill: 'none', humanize: 0 },
   },
   // ---- game ------------------------------------------------------------------
   chiptune: {
@@ -277,6 +300,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 2, 0.5, ['drums', 'arp']), S('verse', 8, 0.8, ['drums', 'bass', 'lead', 'arp']), S('hook', 8, 1, ['drums', 'bass', 'lead', 'arp', 'chords']), S('verse', 8, 0.8, ['drums', 'bass', 'lead', 'arp'])],
     ],
     reverb: 0.1,
+    habits: { fill: 'fill', humanize: 0, seamless: true },
   },
   adventure: {
     id: 'adventure', name: 'Adventure (game)', family: 'game', hint: 'Orchestral exploration theme: strings, horn, harp, light percussion',
@@ -299,6 +323,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.4, ['chords', 'arp']), S('verse', 8, 0.7, ['bass', 'chords', 'lead', 'arp']), S('hook', 8, 1, ['drums', 'bass', 'chords', 'lead', 'pad', 'arp', 'texture']), S('verse', 8, 0.7, ['bass', 'chords', 'lead', 'arp']), S('outro', 4, 0.4, ['chords', 'lead'])],
     ],
     reverb: 0.5,
+    habits: { fill: 'fill', humanize: 0.4, seamless: true },
   },
   battle: {
     id: 'battle', name: 'Battle (game)', family: 'game', hint: 'Fast and driving: string ostinato, brass, taiko and choir',
@@ -321,6 +346,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 4, 0.6, ['drums', 'arp', 'texture']), S('verse', 8, 0.85, ['drums', 'bass', 'chords', 'arp', 'texture']), S('hook', 8, 1, all), S('verse', 8, 0.85, ['drums', 'bass', 'chords', 'lead']), S('hook', 8, 1, all)],
     ],
     reverb: 0.35,
+    habits: { fill: 'fill', humanize: 0.3, seamless: true },
   },
   cozy: {
     id: 'cozy', name: 'Cozy (game)', family: 'game', hint: 'Light village or menu music: pizzicato, marimba, flute, gentle beat',
@@ -343,6 +369,7 @@ export const GENRES: Record<GenreId, Genre> = {
       [S('intro', 2, 0.4, ['chords', 'arp']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'lead']), S('hook', 8, 0.9, ['drums', 'bass', 'chords', 'lead', 'arp', 'pad']), S('verse', 8, 0.75, ['drums', 'bass', 'chords', 'lead', 'texture'])],
     ],
     reverb: 0.3,
+    habits: { fill: 'fill', humanize: 0.5, seamless: true },
   },
 };
 

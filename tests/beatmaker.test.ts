@@ -52,6 +52,58 @@ describe('beat maker: writing', () => {
   });
 });
 
+describe('beat maker: production techniques from the tutorials', () => {
+  it('hi-hats are accented on the beat and softer in between', () => {
+    const c = compose(randomGenome('boombap', rngFrom(12)), 'loop');
+    const hats = c.parts.find((p) => p.role === 'drums')!.notes.filter((n) => n.pitch === 42);
+    const on = hats.filter((n) => Math.abs(n.start - Math.round(n.start)) < 0.05).map((n) => n.velocity);
+    const off = hats.filter((n) => Math.abs(n.start - Math.round(n.start)) >= 0.05).map((n) => n.velocity);
+    const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+    expect(mean(on)).toBeGreaterThan(mean(off) + 0.1);
+  });
+
+  it('marks the end of phrases with a fill, a roll or a drop-out, as the style does it', () => {
+    const fills = (id: 'boombap' | 'house' | 'trap') => {
+      const c = compose(randomGenome(id, rngFrom(3)), 'song');
+      const drums = c.parts.find((p) => p.role === 'drums')!.notes;
+      return { c, drums };
+    };
+    const bb = fills('boombap');
+    expect(bb.drums.some((n) => [41, 45, 48].includes(n.pitch))).toBe(true); // tom fills
+    const house = fills('house');
+    const sec = house.c.sections.find((x, i) => x.energy >= 0.5 && x.roles.includes('drums') && i < house.c.sections.length - 1)!; // quiet sections play no fills
+    const lastBar = (sec.startBar + sec.bars - 1) * 4;
+    expect(house.drums.filter((n) => n.pitch === 38 && n.start >= lastBar && n.start < lastBar + 4).length).toBe(16); // snare roll
+  });
+
+  it('house and techno bass and pads pump with the kick (sidechain)', () => {
+    const p = toProject(compose(randomGenome('house', rngFrom(8)), 'loop'), 'pump');
+    const bass = p.tracks.find((t) => t.name.startsWith('Bass'))!;
+    const pts = bass.automation?.volume ?? [];
+    expect(pts.length).toBeGreaterThan(30);
+    expect(Math.min(...pts.map((x) => x.value))).toBeLessThanOrEqual(-5);
+    const trap = toProject(compose(randomGenome('trap', rngFrom(8)), 'loop'), 'no pump');
+    expect(trap.tracks.every((t) => !t.automation?.volume?.length)).toBe(true);
+  });
+
+  it('808 lines in trap and drill slide into some notes, within an octave', () => {
+    let slides = 0;
+    for (let s = 0; s < 20; s++) {
+      const g = { ...randomGenome('drill', rngFrom(100 + s)), bassStyle: 'glide' as const };
+      for (const n of compose(g, 'loop').parts.find((p) => p.role === 'bass')?.notes ?? []) {
+        if (n.bend) { slides++; expect(Math.abs(n.bend[0])).toBeLessThanOrEqual(1200); expect(n.bend[n.bend.length - 1]).toBe(0); }
+      }
+    }
+    expect(slides).toBeGreaterThan(5);
+  });
+
+  it('game music loops end without a fill so they repeat seamlessly', () => {
+    const c = compose(randomGenome('chiptune', rngFrom(4)), 'loop');
+    const drums = c.parts.find((p) => p.role === 'drums')!.notes;
+    expect(drums.some((n) => [41, 45, 48].includes(n.pitch) && n.start >= 7 * 4)).toBe(false);
+  });
+});
+
 describe('beat maker: critics', () => {
   const base = () => randomGenome('house', rngFrom(5));
 

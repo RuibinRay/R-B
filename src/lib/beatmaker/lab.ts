@@ -17,17 +17,24 @@ export function shippedMemory(genre: GenreId): GenreMemory {
   return JSON.parse(JSON.stringify(SHIPPED[genre] ?? emptyGenreMemory()));
 }
 
-/** This browser's memory for a style: the shipped one, plus local training and ratings. */
+/**
+ * This browser's memory for a style: the shipped one, plus local training and ratings.
+ * When a newer training ships, local training gives way to it but your ratings are kept.
+ */
 export function loadMemory(genre: GenreId): GenreMemory {
   try {
     const raw = localStorage.getItem(KEY + genre);
-    if (raw) return { ...emptyGenreMemory(), ...JSON.parse(raw) };
+    if (raw) {
+      const local = { ...emptyGenreMemory(), ...JSON.parse(raw) } as GenreMemory & { basedOn?: string | null };
+      if (local.basedOn === TRAINED_AT) return local;
+      return { ...shippedMemory(genre), taste: local.taste ?? {} };
+    }
   } catch { /* storage unavailable: use the shipped memory */ }
   return shippedMemory(genre);
 }
 
 export function saveMemory(genre: GenreId, mem: GenreMemory): void {
-  try { localStorage.setItem(KEY + genre, JSON.stringify(mem)); } catch { /* not saved; works for this visit */ }
+  try { localStorage.setItem(KEY + genre, JSON.stringify({ ...mem, basedOn: TRAINED_AT })); } catch { /* not saved; works for this visit */ }
 }
 
 export function forgetLocal(genre: GenreId): void {

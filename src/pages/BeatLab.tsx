@@ -11,7 +11,8 @@ import * as db from '../lib/db';
 import { getInstrument } from '../lib/instruments';
 import { NOTE_NAMES, SCALES, formatTime } from '../lib/music';
 import { downloadBlob, encodeWav, safeName, toPcm } from '../lib/wav';
-import { limitPeaks } from '../lib/loudness';
+import { applyGain, limitPeaks } from '../lib/loudness';
+import { listen, type Hearing } from '../lib/beatmaker/listen';
 import { A, navigate, toast } from '../store/store';
 import { Hint } from '../components/ui';
 
@@ -19,7 +20,7 @@ const ROLE_NAMES: Record<Role, string> = { drums: 'Drums', bass: 'Bass', chords:
 const instName = (id?: string) => (id ? getInstrument(id)?.name ?? id : '—');
 const pct = (v: number) => `${Math.round(v * 100)}`;
 
-interface Result { candidate: Candidate; name: string; rating?: 1 | -1; audio?: AudioBuffer; rendering?: boolean }
+interface Result { candidate: Candidate; name: string; rating?: 1 | -1; audio?: AudioBuffer; rendering?: boolean; heard?: Hearing }
 
 function Sparkline({ values, label }: { values: number[]; label: string }) {
   if (values.length < 2) return null;
@@ -145,8 +146,11 @@ export function BeatLab() {
     try {
       const p = toProject(compose(r.candidate.genome, length), r.name);
       const audio = await renderProject(p, engine.buffers);
-      limitPeaks(toPcm(audio), -1); // no clipping in the preview or the WAV
-      setResults((rs) => rs.map((x, k) => (k === i ? { ...x, audio, rendering: false } : x)));
+      const heard = listen(audio, r.candidate.genome.genre);
+      // bring the preview and the WAV to a normal listening level (-14 LUFS, like streaming services), never clipping
+      if (Number.isFinite(heard.lufs)) applyGain(toPcm(audio), Math.min(18, -14 - heard.lufs));
+      limitPeaks(toPcm(audio), -1);
+      setResults((rs) => rs.map((x, k) => (k === i ? { ...x, audio, heard, rendering: false } : x)));
       return audio;
     } catch (e) {
       setResults((rs) => rs.map((x, k) => (k === i ? { ...x, rendering: false } : x)));
@@ -309,6 +313,16 @@ export function BeatLab() {
                           <span className="faint">{v.note}</span>
                         </div>
                       ))}
+                      <div className="lab-verdict">
+                        <span>Heard in the real audio</span>
+                        {r.heard ? (
+                          <>
+                            <div className="lab-bar" aria-hidden><i style={{ width: `${Math.round(r.heard.spectrumMatch * 100)}%` }} className={r.heard.spectrumMatch < 0.6 ? 'low' : ''} /></div>
+                            <span className="num">{pct(r.heard.spectrumMatch)}</span>
+                            <span className="faint">{r.heard.worst}; mixed at {r.heard.lufs.toFixed(1)} LUFS (played and saved at -14)</span>
+                          </>
+                        ) : <span className="faint" style={{ gridColumn: '2 / -1' }}>press play: the rendered audio is then measured too</span>}
+                      </div>
                       <div className="lab-parts">
                         {comp.parts.map((p) => <span key={p.role} className="chip">{ROLE_NAMES[p.role]}: {instName(p.instrumentId)}</span>)}
                       </div>
@@ -325,8 +339,8 @@ export function BeatLab() {
           <h2 className="section-title">How it works, honestly</h2>
           <p className="hint" style={{ color: 'var(--muted)' }}>
             This is not a neural network trained on recordings. It writes beats from what producers teach about each style (tempo, drum placement, swing, typical instruments, song structure),
-            judges every attempt with twelve critics (groove, kick and bass, harmony, clashing notes, melody shape, repetition, frequency balance, room for every part, mix balance, register, arrangement)
-            that use measurements of how each of the app's instruments really sounds, and keeps the best. It learns by experiment: it swaps one choice at a time in its best beats and records which options scored better.
+            judges every attempt with fifteen critics (tempo, groove, drum dynamics, kick and bass, harmony, clashing notes, melody shape, catchy hook, repetition, frequency balance, room for every part, mix balance, register, arrangement, transitions)
+            that use measurements of how each of the app's instruments really sounds, and keeps the best. It learns by experiment: it swaps one choice at a time in its best beats and records which options scored better. It also listens: it has rendered the parts of 132 of its own beats, compared what it heard with what it had predicted and corrected itself, and it measures the real audio of every beat you play.
             The critics check craft, not feeling; whether a beat moves you is for you to decide, and your ratings are how it learns that.
           </p>
         </section>

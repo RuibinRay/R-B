@@ -127,16 +127,21 @@ on recordings, and it says so on the page. It works in four layers:
    hook, breakdown, build, drop, outro).
 2. **A measured sound model** (`profiles.json`). Every one of the 104 instruments it may choose was
    rendered through the app's own engine and measured: loudness, energy in seven frequency bands, how
-   long a note rings. It then **listened to its own beats**: it rendered the parts of 36 of them,
-   compared real loudness and spectrum with its predictions, and stored a correction per instrument
-   (`calibrate.ts`). On 24 beats it had not seen, that cut the spectrum prediction error by about
-   20%. Its level predictions were within about 2 dB before correction (median).
-3. **Twelve critics** (`critics.ts`) judge each beat from 0 to 1, with a reason: tempo for the style,
+   long a note rings. It then **listened to its own beats**, in two rounds: it rendered the parts of
+   132 of them (36, then 96 more), compared the real loudness and spectrum with its predictions, and
+   stored a correction per instrument (`calibrate.ts`). On 24 beats it had not heard, the spectrum
+   prediction error fell from 0.37 (uncalibrated) to 0.28 after the first round and 0.24 after the
+   second, and the median level error fell from 2.3 dB to 0.9 dB. The page also measures the real
+   audio (loudness, peak, spectrum against the style) of every beat you play.
+3. **Fifteen critics** (`critics.ts`) judge each beat from 0 to 1, with a reason: tempo for the style,
    drum groove against the style's templates and backbeat, kick and bass (locked together for trap,
    kept apart for house), notes in key and melody on chord tones, semitone clashes and muddy low
    notes, melody shape (steps, leaps that recover, range, density), repetition against variation,
    frequency balance against the style, masking (too many parts in one band), mix balance, register
-   (bass low, melody on top) and, for songs, whether the energy follows the planned arrangement. Each
+   (bass low, melody on top), drum dynamics (accented beats, softer off-beats, quiet ghost notes), a
+   catchy hook (call and answer share a rhythm, one clear peak, ending on the home note, some
+   syncopation) and, for songs, whether the energy follows the planned arrangement and whether every
+   section change is marked by a fill, roll, drop-out or crash. Each
    part's fader is set by gain staging from the measured loudness, as an engineer would.
 4. **Learning by trial and error** (`learn.ts`). A population of beats is bred for many generations:
    the critics score each, the best survive, the rest are mutated and crossed. After each round the
@@ -146,11 +151,42 @@ on recordings, and it says so on the page. It works in four layers:
    measured well. Your thumbs-up and thumbs-down are recorded per decision too, so it drifts towards
    your taste. The page shows what it has learned per style.
 
+**Production techniques from tutorials** (built into the composer, from the sources listed below):
+hi-hats accented on the beat, medium on the off-beat and soft in between; a few milliseconds of
+timing and loudness drift on the drums for styles played by people (none for techno or chiptune);
+ghost notes at about a third of the loudness leading into the backbeat; the end of every eight bars
+and of every section marked the way the style does it (a one-beat snare-and-tom fill, a sixteenth
+snare roll in house and techno, or a short drop-out before the next phrase in trap and drill), and
+a crash where the new section lands; 808 slides in trap and drill (the note starts on the previous
+pitch and glides in, within an octave); sidechain pumping in house, techno and synthwave (bass,
+chords and pads dip on every kick and recover within an eighth note); and game loops that end
+without a fill so they repeat seamlessly.
+
+Sources: [EDMProd on turnarounds](https://www.edmprod.com/turnarounds/), [MusicRadar on drum
+fills](https://www.musicradar.com/tuition/tech/learn-how-drum-fills-work-in-5-easy-steps-639154),
+[Native Instruments drum programming 101](https://www.native-instruments.com/blogs/blog/drum-programming-101),
+[MusicRadar on hi-hats](https://www.musicradar.com/tuition/tech/10-steps-to-hotter-hi-hats-604382),
+[Ableton on sidechain compression](https://www.ableton.com/en/blog/sidechain-compression-part-2-common-and-uncommon-uses/),
+[MusicRadar on sidechaining](https://musicradar.com/tuition/tech/13-ways-to-use-sidechaining-more-effectively-625016),
+[Icon Collective on melodies](https://www.iconcollective.edu/writing-melodies-tips),
+[Soundfly on motifs](https://flypaper.soundfly.com/write/7-melody-writing-and-motivic-development-techniques-for-songwriters/),
+[Violet Recording on 808 slides](https://violetrecording.com/how-to-make-808-slides/),
+[Ableton on 808 bass](https://www.ableton.com/en/blog/808-bass-tutorials-creation-mix/),
+[GameMaker on game music](https://gamemaker.io/en/blog/compose-video-game-music), plus the guides
+cited for the first version (Mix Elite, Audeobox, Native Instruments, Soundtrap, MusicRadar,
+EDMProd, Toby Rush, iZotope).
+
 `npm run train` trains every style (about two minutes; `ROUNDS=20 npm run train -- trap` for more on
 one style) and writes `learned.json`, which ships with the app. "Train more" on the page continues
 in the browser; that and your ratings stay in that browser.
 
-Measured on the shipped training (10 rounds per style, about 7,500 beats each): the average craft
+Measured on the shipped training (30 rounds per style, about 29,000 beats each, 350,000 in all,
+about 12 minutes): under the current critics, the best beat it keeps per style scores 0.966 on
+average against 0.952 for the previous, shorter training, and 0.821 for untrained beats. Its first
+guesses (beats drawn from what it learned, before any search) average 0.852, the same as after the
+shorter training (0.855): more training no longer improves those, so the gains this time come from
+the new production techniques and the better sound model, not from the extra rounds. Before that:
+the average craft
 score of beats drawn from the learned preferences rose above that of beats drawn without them in
 every style, and bred beats reach 0.93-0.98 against 0.78-0.85 for random ones (the exact numbers are
 printed by `npm run train`). Those are the critics' scores. They measure craft that can be checked:

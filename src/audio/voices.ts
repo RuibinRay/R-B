@@ -198,7 +198,7 @@ class SynthVoice implements Voice {
   private poly: Tone.PolySynth;
   private post: Tone.ToneAudioNode[] = [];
 
-  constructor(preset: SynthPreset) {
+  constructor(private preset: SynthPreset) {
     this.output = new Tone.Gain(1);
     const classes = { synth: Tone.Synth, fm: Tone.FMSynth, mono: Tone.MonoSynth, am: Tone.AMSynth, duo: Tone.DuoSynth, membrane: Tone.MembraneSynth };
     this.poly = new Tone.PolySynth({ voice: classes[preset.voice ?? 'synth'], options: preset.options, maxPolyphony: preset.poly ?? 20 } as never);
@@ -211,8 +211,32 @@ class SynthVoice implements Voice {
 
   noteOn(midi: number, time: number, velocity: number): void { this.poly.triggerAttack(midiToName(midi), time, velocity); }
   noteOff(midi: number, time: number): void { this.poly.triggerRelease(midiToName(midi), time); }
-  play(midi: number, duration: number, time: number, velocity: number): void {
+  play(midi: number, duration: number, time: number, velocity: number, bend?: number[]): void {
+    if (bend && bend.length > 1 && bend.some((c) => c !== 0)) { this.slide(midi, duration, time, velocity, bend); return; }
     this.poly.triggerAttackRelease(midiToName(midi), Math.max(0.02, duration), time, velocity);
+  }
+
+  /**
+   * A note whose pitch moves (an 808 slide): played on a voice of its own so that only
+   * this note bends. `bend` is in cents, evenly spaced over the note.
+   */
+  private slide(midi: number, duration: number, time: number, velocity: number, bend: number[]): void {
+    const classes = { synth: Tone.Synth, fm: Tone.FMSynth, mono: Tone.MonoSynth, am: Tone.AMSynth, duo: Tone.DuoSynth, membrane: Tone.MembraneSynth };
+    const Voice = classes[this.preset.voice ?? 'synth'] as unknown as new (o: unknown) => Tone.Synth;
+    const v = new Voice(this.preset.options);
+    v.volume.value = this.preset.volume;
+    v.connect(this.post[0] ?? this.output);
+    const hz = (c: number) => 440 * Math.pow(2, (midi - 69 + c / 100) / 12);
+    const dur = Math.max(0.02, duration);
+    v.triggerAttackRelease(hz(bend[0]), dur, time, velocity);
+    // the membrane's own pitch drop happens first; the slide follows it
+    const start = time + (this.preset.voice === 'membrane' ? 0.05 : 0.005);
+    const step = dur / (bend.length - 1);
+    v.frequency.setValueAtTime(hz(bend[0]), start);
+    for (let i = 1; i < bend.length; i++) v.frequency.exponentialRampToValueAtTime(hz(bend[i]), Math.max(start + 0.001, time + i * step));
+    // in an offline render the graph is thrown away as a whole; live, free the voice after it ends
+    const raw = Tone.getContext().rawContext as unknown as { startRendering?: unknown; currentTime: number };
+    if (typeof raw.startRendering !== 'function') setTimeout(() => v.dispose(), Math.max(0, (time - raw.currentTime + dur + 3) * 1000));
   }
   releaseAll(): void { this.poly.releaseAll(); }
   dispose(): void {

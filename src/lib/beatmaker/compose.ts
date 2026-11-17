@@ -111,6 +111,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
     return { rootPc, quality, tones: chordPitches(rootPc, quality, 4).map((p) => p % 12) };
   });
   const spb16 = 0.25;
+  const habits = genre.habits ?? {};
   const swing = (step: number) => (step % 2 === 1 ? g.swing * spb16 : 0);
   const notes: Partial<Record<Role, Note[]>> = {};
   const add = (role: Role, pitch: number, start: number, duration: number, velocity: number) => {
@@ -133,18 +134,45 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
         const sparse = sec.energy < 0.5;
         const snarePitch = genre.family === 'electronic' || g.genre === 'trap' ? 39 : 38;
         const finalBuildBar = sec.name === 'build' && b === sec.bars - 1;
+        // The end of a phrase is marked: the last bar of every eight, and the bar before a new section.
+        const nextSec = sections[sections.indexOf(sec) + 1];
+        const sectionEnd = b === sec.bars - 1 && !!nextSec;
+        const phraseEnd = (b % 8 === 7 || sectionEnd) && !(habits.seamless && length === 'loop' && b === sec.bars - 1);
+        const fill = phraseEnd && !sparse && sec.name !== 'build' ? (habits.fill ?? 'fill') : 'none';
+        const dropout = fill === 'dropout' && nextSec ? true : fill === 'dropout' && b % 8 === 7;
+        // Humanize: players drift a few milliseconds and never hit two notes exactly alike.
+        const drift = (habits.humanize ?? 0) * 0.008 * (g.bpm / 60);
+        const human = (at: number) => Math.max(sec.startBar * BAR, at + (drift ? (rng() - 0.5) * 2 * drift : 0));
+        const vary = (v: number) => v * (1 + (habits.humanize ?? 0) * 0.2 * (rng() - 0.5));
+        // Hi-hat dynamics from drum programming guides: strong on the beat, medium on the
+        // off-beat eighth, soft on the sixteenths in between.
+        const hatAccent = (s: number) => (s % 4 === 0 ? 1 : s % 2 === 0 ? 0.72 : 0.5);
+        const backbeats = genre.halfTime ? [8] : [4, 12];
         for (let s = 0; s < 16; s++) {
           const at = t0 + s * spb16 + swing(s);
+          const inFill = fill === 'fill' && s >= 12;
           const k = d.kick[half + s], sn = d.snare[half + s], h = d.hat[half + s], o = d.open[half + s];
-          if (k && !(finalBuildBar && s >= 12)) add('drums', 36, at, 0.25, k * vScale);
-          if (sn && !sparse && sec.name !== 'build') add('drums', snarePitch, at, 0.25, sn * vScale);
-          else if (!sn && !sparse && d.ghosts > 0 && s % 2 === 1 && rng() < d.ghosts * 0.35) add('drums', 38, at, 0.12, 0.22);
-          const rollZone = lastOfPhrase && s >= 12 && d.rolls > 0 && rng() < d.rolls;
+          if (dropout && s >= 14) continue; // a breath before the next phrase lands
+          if (k && !(finalBuildBar && s >= 12) && !inFill) add('drums', 36, human(at), 0.25, vary(k) * vScale);
+          if (sn && !sparse && sec.name !== 'build' && !inFill) add('drums', snarePitch, human(at), 0.25, vary(sn) * vScale);
+          else if (!sn && !sparse && !inFill && d.ghosts > 0 && backbeats.some((bb) => bb - 1 === s) && rng() < d.ghosts * 1.5) {
+            add('drums', 38, human(at), 0.12, 0.3 + 0.08 * rng()); // ghost note leading into the backbeat
+          }
+          const rollZone = lastOfPhrase && s >= 12 && d.rolls > 0 && rng() < d.rolls && !inFill;
           if (rollZone && s === 12) {
             const n = rng() < 0.5 ? 6 : 8; // triplet or 32nd roll over the last beat
             for (let i = 0; i < n; i++) add('drums', 42, t0 + 3 + i / n, 0.08, (0.35 + (0.5 * i) / n) * vScale);
-          } else if (!(lastOfPhrase && s >= 12 && rollZone) && h) add('drums', 42, at, 0.1, h * (sparse ? 0.7 : 1) * vScale);
-          if (o && !sparse) add('drums', 46, at, 0.4, o * 0.85 * vScale);
+          } else if (!(lastOfPhrase && s >= 12 && rollZone) && h && !inFill) add('drums', 42, human(at), 0.1, vary(h * hatAccent(s)) * (sparse ? 0.7 : 1) * vScale);
+          if (o && !sparse && !inFill) add('drums', 46, human(at), 0.4, vary(o) * 0.85 * vScale);
+        }
+        if (fill === 'fill') {
+          // a one-beat fill on the last beat: snare and toms falling to the next downbeat
+          const kit = [38, 48, 45, 41];
+          const shape = rng() < 0.5 ? [0, 1, 2, 3] : [0, 0, 1, 2];
+          shape.forEach((which, i) => add('drums', kit[which], t0 + 3 + i * 0.25 + swing(i), 0.2, (0.6 + 0.1 * i) * vScale));
+        } else if (fill === 'roll' && (b % 8 === 7 || sectionEnd)) {
+          // house and techno: a sixteenth snare roll fading up through the last bar
+          for (let i = 0; i < 16; i++) add('drums', 38, t0 + i * spb16, 0.1, (0.25 + 0.5 * (i / 15)) * vScale);
         }
         if (sec.name === 'build') {
           // snare roll that doubles in speed through the section
@@ -152,7 +180,8 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
           const stop = finalBuildBar ? 3 : 4;
           for (let i = 0; i < rate * stop; i++) add('drums', 38, t0 + i / rate, 0.1, 0.45 + 0.5 * ((b * rate * 4 + i) / (sec.bars * rate * 4)));
         }
-        if (b === 0 && (sec.name === 'hook' || sec.name === 'drop')) add('drums', 49, t0, 2, 0.7);
+        const prevSec = sections[sections.indexOf(sec) - 1];
+        if (b === 0 && (sec.name === 'hook' || sec.name === 'drop' || (prevSec && (habits.fill ?? 'fill') !== 'none'))) add('drums', 49, t0, 2, sec.name === 'hook' || sec.name === 'drop' ? 0.7 : 0.55);
       }
 
       // ---- bass ----
@@ -166,10 +195,19 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
           case 'follow-kick':
           case 'glide': {
             const hits = kicks.length ? kicks : [0, 8];
+            let prev = -1;
             hits.forEach((s, i) => {
               const next = hits[i + 1] ?? 16;
               const jump = g.bassStyle === 'glide' && i > 0 && rng() < 0.3 ? 12 : 0;
-              add('bass', fit(root + jump, range), t0 + s * spb16, Math.min(8, next - s) * spb16 * 0.95, v);
+              const pitch = fit(root + jump, range);
+              const len = Math.min(8, next - s) * spb16 * 0.95;
+              add('bass', pitch, t0 + s * spb16, len, v);
+              // 808 slide: the note starts on the previous pitch and glides in (kept within an octave)
+              if (habits.slides && g.bassStyle === 'glide' && prev >= 0 && prev !== pitch && Math.abs(prev - pitch) <= 12 && rng() < 0.45) {
+                const n = notes.bass![notes.bass!.length - 1];
+                n.bend = [(prev - pitch) * 100, Math.round((prev - pitch) * 35), 0, 0, 0, 0, 0, 0];
+              }
+              prev = pitch;
             });
             break;
           }
@@ -301,9 +339,18 @@ export function toProject(c: Composition, name: string): Project {
   p.bpm = c.bpm;
   p.key = { root: c.key.root, scale: c.key.scale };
   p.markers = c.sections.length > 1 ? c.sections.map((s) => ({ id: uid(), beat: s.startBar * BAR, name: s.name[0].toUpperCase() + s.name.slice(1) })) : [];
+  const kicks = (c.parts.find((x) => x.role === 'drums')?.notes ?? []).filter((n) => n.pitch === 36).map((n) => n.start).sort((x, y) => x - y);
   for (const part of c.parts) {
     const def = getInstrument(part.instrumentId);
     const t: Track = newTrack(`${PART_NAMES[part.role]}${def ? ` (${def.name})` : ''}`, part.instrumentId, { volume: part.volume, pan: part.pan, fx: part.fx });
+    const duck = GENRES[c.genome.genre].habits?.sidechain;
+    if (duck && kicks.length && (part.role === 'bass' || part.role === 'chords' || part.role === 'pad' || part.role === 'arp')) {
+      // Sidechain pump: the part dips on every kick and recovers within an eighth note.
+      const depth = part.role === 'bass' ? duck : duck * 0.6;
+      const pts: { id: string; beat: number; value: number }[] = [];
+      for (const k of kicks) pts.push({ id: uid(), beat: Math.max(0, k - 0.02), value: 0 }, { id: uid(), beat: k + 0.01, value: -depth }, { id: uid(), beat: k + 0.45, value: 0 });
+      t.automation = { volume: pts };
+    }
     p.tracks.push(t);
     for (const s of c.sections) {
       const a = s.startBar * BAR, z = a + s.bars * BAR;
