@@ -31,6 +31,8 @@ export interface Genome {
   answer: Answer;
   arp: ArpShape;
   arpRate: 2 | 4; // notes per beat
+  /** Which melodic voice carries the beat: a melody, or an arpeggio. Never both at full level. */
+  focus?: 'lead' | 'arp';
   levels: Partial<Record<Role, number>>; // dB nudges around the style's balance
   form: number;
 }
@@ -58,27 +60,34 @@ export function sampleLine(rng: Rng, template: string | undefined): number[] {
   });
 }
 
-/** A two-bar melodic idea: a few notes on the 16th grid, mostly stepwise, starting and ending stably. */
+/**
+ * A two-bar melodic idea, written the way melody guides suggest: a few notes, mostly on
+ * strong beats, moving by step with the odd leap, landing on chord tones on the beat,
+ * staying within an octave, and leaving the last beat empty so the answer can follow.
+ */
 export function randomMotif(rng: Rng, density: [number, number]): MotifNote[] {
-  const count = Math.max(2, Math.round(between(rng, density[0], density[1]) * 2));
-  // favour strong positions: beats, then eighths, then sixteenths
-  const weights = Array.from({ length: 32 }, (_, i) => (i % 4 === 0 ? 4 : i % 2 === 0 ? 2 : 0.7) * (i === 0 ? 2.5 : 1));
+  const count = Math.max(3, Math.min(10, Math.round(between(rng, density[0], density[1]) * 2)));
+  const weights = Array.from({ length: 28 }, (_, i) => (i % 4 === 0 ? 4 : i % 2 === 0 ? 2 : 0.6) * (i === 0 ? 3 : 1));
   const steps = new Set<number>();
-  while (steps.size < Math.min(count, 24)) {
+  while (steps.size < count) {
     let r = rng() * weights.reduce((a, b) => a + b, 0);
     let i = 0;
     while (r > weights[i]) { r -= weights[i]; i++; }
-    steps.add(Math.min(31, i));
+    steps.add(Math.min(27, i));
   }
   const sorted = [...steps].sort((a, b) => a - b);
-  let deg = pick(rng, [0, 2, 4, 4, 7]);
+  const chordTones = [0, 2, 4, 7];
+  let deg = pick(rng, [0, 2, 4, 4]);
+  const lo = deg - 3, hi = deg + 5; // about an octave of room around where it starts
   return sorted.map((step, k) => {
     if (k > 0) {
-      const move = rng() < 0.68 ? pick(rng, [-1, 1, -1, 1, -2, 2]) : pick(rng, [-4, -3, 3, 4, 5, -5]);
-      deg = Math.max(-3, Math.min(9, deg + move));
+      const move = rng() < 0.7 ? pick(rng, [-1, 1, -1, 1, -2, 2]) : pick(rng, [-3, 3, 4, -4]);
+      deg = Math.max(lo, Math.min(hi, deg + move));
+      // on the beat, settle on the nearest chord tone
+      if (step % 4 === 0 && !chordTones.includes(((deg % 7) + 7) % 7)) deg += rng() < 0.5 ? 1 : -1;
     }
-    const next = sorted[k + 1] ?? 32;
-    const len = Math.max(1, Math.min(next - step, rng() < 0.7 ? next - step : Math.ceil((next - step) / 2)));
+    const next = sorted[k + 1] ?? 30;
+    const len = Math.max(1, Math.min(next - step, rng() < 0.65 ? next - step : Math.ceil((next - step) / 2)));
     return { step, deg, len, acc: Math.round(between(rng, 0.6, 1) * 100) / 100 };
   });
 }
@@ -88,7 +97,10 @@ export function randomGenome(genreId: GenreId, rng: Rng, choose: Chooser = unifo
   const inst: Partial<Record<Role, string>> = {};
   for (const role of ROLES) {
     const options = g.roles[role];
-    if (options?.length) inst[role] = choose(`inst.${role}`, options);
+    if (!options?.length) continue;
+    // the same sound on two parts blurs them together: prefer one not used yet
+    const fresh = options.filter((o) => !Object.values(inst).includes(o));
+    inst[role] = choose(`inst.${role}`, fresh.length ? fresh : options);
   }
   const template = g.drums ? choose('drumTemplate', g.drums.templates.map((_, i) => i)) : 0;
   const tpl = g.drums?.templates[template];
@@ -119,6 +131,7 @@ export function randomGenome(genreId: GenreId, rng: Rng, choose: Chooser = unifo
     arpRate: choose('arpRate', [2, 4] as (2 | 4)[]),
     levels,
     form: choose('form', g.forms.map((_, i) => i)),
+    focus: choose('focus', (g.family === 'electronic' || g.id === 'chiptune' ? ['lead', 'arp'] : ['lead', 'lead', 'lead', 'arp']) as ('lead' | 'arp')[]),
   };
 }
 
@@ -149,13 +162,17 @@ export function mutate(parent: Genome, rng: Rng, choose: Chooser = uniformChoose
       if (rng() < 0.2) { g.drums.rolls = fresh.drums.rolls; g.drums.ghosts = fresh.drums.ghosts; }
     } else if (r < 0.5) {
       const roles = Object.keys(g.inst) as Role[];
-      if (roles.length) { const role = pick(rng, roles); g.inst[role] = fresh.inst[role]; }
+      if (roles.length) {
+        const role = pick(rng, roles);
+        const opts = (genre.roles[role] ?? []).filter((o) => !Object.entries(g.inst).some(([r, v]) => r !== role && v === o));
+        g.inst[role] = opts.includes(fresh.inst[role]!) ? fresh.inst[role] : opts.length ? pick(rng, opts) : fresh.inst[role];
+      }
     } else if (r < 0.58) g.bassStyle = fresh.bassStyle;
     else if (r < 0.66) { g.chordStyle = fresh.chordStyle; g.voicing = fresh.voicing; }
     else if (r < 0.72) g.prog = fresh.prog;
     else if (r < 0.77) { g.bpm = Math.round(Math.max(genre.bpm[0], Math.min(genre.bpm[1], g.bpm + pick(rng, [-4, -2, 2, 4])))); g.swing = fresh.swing; }
     else if (r < 0.83) { const role = pick(rng, ROLES); g.levels[role] = Math.max(-6, Math.min(6, (g.levels[role] ?? 0) + pick(rng, [-2, -1, 1, 2]))); }
-    else if (r < 0.88) { g.answer = fresh.answer; g.arp = fresh.arp; g.arpRate = fresh.arpRate; }
+    else if (r < 0.88) { g.answer = fresh.answer; g.arp = fresh.arp; g.arpRate = fresh.arpRate; if (rng() < 0.4) g.focus = fresh.focus; }
     else if (r < 0.93) { g.melOct = fresh.melOct; g.chordOct = fresh.chordOct; g.bassOct = fresh.bassOct; }
     else if (r < 0.97) g.scale = fresh.scale;
     else g.form = fresh.form;
@@ -168,9 +185,9 @@ export function mutate(parent: Genome, rng: Rng, choose: Chooser = uniformChoose
 export function crossover(a: Genome, b: Genome, rng: Rng): Genome {
   const c = clone(a);
   const from = () => (rng() < 0.5 ? a : b);
-  const take = <K extends keyof Genome>(...keys: K[]) => { const src = from(); for (const k of keys) (c as Genome)[k] = JSON.parse(JSON.stringify(src[k])); };
+  const take = <K extends keyof Genome>(...keys: K[]) => { const src = from(); for (const k of keys) (c as Genome)[k] = src[k] === undefined ? src[k] : JSON.parse(JSON.stringify(src[k])); };
   take('bpm', 'swing'); take('root', 'scale', 'prog'); take('drums'); take('bassStyle', 'bassOct'); take('chordStyle', 'voicing', 'chordOct');
-  take('motif', 'melOct', 'answer'); take('arp', 'arpRate'); take('levels'); take('form');
+  take('motif', 'melOct', 'answer'); take('arp', 'arpRate', 'focus'); take('levels'); take('form');
   for (const role of ROLES) { const src = from(); if (src.inst[role]) c.inst[role] = src.inst[role]; }
   c.seed = Math.floor(rng() * 1e9);
   return c;
@@ -179,7 +196,7 @@ export function crossover(a: Genome, b: Genome, rng: Rng): Genome {
 /** The decisions as "gene:value" labels, for keeping statistics about what works. */
 export function choicesOf(g: Genome): string[] {
   const out = [`scale:${g.scale}`, `prog:${g.prog}`, `bassStyle:${g.bassStyle}`, `bassOct:${g.bassOct}`, `chordStyle:${g.chordStyle}`, `voicing:${g.voicing}`,
-    `chordOct:${g.chordOct}`, `melOct:${g.melOct}`, `answer:${g.answer}`, `arp:${g.arp}`, `arpRate:${g.arpRate}`, `form:${g.form}`];
+    `chordOct:${g.chordOct}`, `melOct:${g.melOct}`, `answer:${g.answer}`, `arp:${g.arp}`, `arpRate:${g.arpRate}`, `form:${g.form}`, `focus:${g.focus ?? 'lead'}`];
   if (g.drums) out.push(`drumTemplate:${g.drums.template}`);
   for (const role of ROLES) if (g.inst[role]) out.push(`inst.${role}:${g.inst[role]}`);
   return out;

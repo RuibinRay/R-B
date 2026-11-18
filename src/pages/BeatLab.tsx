@@ -339,7 +339,7 @@ export function BeatLab() {
           <h2 className="section-title">How it works, honestly</h2>
           <p className="hint" style={{ color: 'var(--muted)' }}>
             This is not a neural network trained on recordings. It writes beats from what producers teach about each style (tempo, drum placement, swing, typical instruments, song structure),
-            judges every attempt with fifteen critics (tempo, groove, drum dynamics, kick and bass, harmony, clashing notes, melody shape, catchy hook, repetition, frequency balance, room for every part, mix balance, register, arrangement, transitions)
+            judges every attempt with sixteen critics (tempo, groove, drum dynamics, clarity, kick and bass, harmony, clashing notes, melody shape, catchy hook, repetition, frequency balance, room for every part, mix balance, register, arrangement, transitions)
             that use measurements of how each of the app's instruments really sounds, and keeps the best. It learns by experiment: it swaps one choice at a time in its best beats and records which options scored better. It also listens: it has rendered the parts of 132 of its own beats, compared what it heard with what it had predicted and corrected itself, and it measures the real audio of every beat you play.
             The critics check craft, not feeling; whether a beat moves you is for you to decide, and your ratings are how it learns that.
           </p>

@@ -104,6 +104,46 @@ describe('beat maker: production techniques from the tutorials', () => {
   });
 });
 
+describe('beat maker: fixes for beats that sounded bad', () => {
+  const melodicRoles = ['chords', 'pad', 'lead', 'arp'];
+  it('never plays a melody and an arpeggio at full level together, and keeps the featured voice in front', () => {
+    for (const genre of GENRE_LIST) for (let k = 0; k < 4; k++) {
+      const c = compose(randomGenome(genre.id, rngFrom(k * 31 + genre.id.length)), 'loop');
+      const lead = c.parts.find((p) => p.role === 'lead'), arp = c.parts.find((p) => p.role === 'arp');
+      if (lead && arp) expect(genre.family, `${genre.id} has both`).toBe('electronic');
+      expect(c.parts.filter((p) => melodicRoles.includes(p.role)).length, genre.id).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it('holds pad chords only as long as the harmony lasts', () => {
+    for (const genre of GENRE_LIST) for (let k = 0; k < 4; k++) {
+      const c = compose(randomGenome(genre.id, rngFrom(k + 50)), 'song');
+      const pad = c.parts.find((p) => p.role === 'pad');
+      for (const n of pad?.notes ?? []) {
+        const b0 = Math.floor(n.start / 4), b1 = Math.floor((n.start + n.duration - 0.01) / 4);
+        for (let b = b0 + 1; b <= b1; b++) expect(c.chords[b].rootPc, `${genre.id} pad over a chord change`).toBe(c.chords[b0].rootPc);
+      }
+    }
+  });
+
+  it('does not give two parts the same sound when there is a choice', () => {
+    for (const genre of GENRE_LIST) for (let k = 0; k < 6; k++) {
+      // the parts that actually play
+      const ids = compose(randomGenome(genre.id, rngFrom(k + 900)), 'loop').parts.filter((p) => melodicRoles.includes(p.role)).map((p) => p.instrumentId);
+      expect(new Set(ids).size, genre.id).toBe(ids.length);
+    }
+  });
+
+  it('writes melodies within about an octave that leave room for the answer', () => {
+    for (let k = 0; k < 40; k++) {
+      const m = randomGenome('trap', rngFrom(k)).motif;
+      const degs = m.map((n) => n.deg);
+      expect(Math.max(...degs) - Math.min(...degs)).toBeLessThanOrEqual(8);
+      expect(Math.max(...m.map((n) => n.step))).toBeLessThan(28);
+    }
+  });
+});
+
 describe('beat maker: critics', () => {
   const base = () => randomGenome('house', rngFrom(5));
 

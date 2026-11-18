@@ -106,8 +106,8 @@ export const GENRES: Record<GenreId, Genre> = {
       ],
     },
     roles: {
-      drums: ['trap-kit'], bass: ['bass-808', 'sub-bass'], chords: ['grand-piano', 'dark-pad', 'synth-strings', 'choir-pad'],
-      lead: ['fm-bell', 'glass-bells', 'music-box', 'flute', 'celesta', 'pluck', 'vibrato-lead'], pad: ['dark-pad', 'choir', 'slow-strings'],
+      drums: ['trap-kit'], bass: ['bass-808', 'sub-bass'], chords: ['grand-piano', 'synth-strings', 'choir-pad', 'electric-piano'],
+      lead: ['fm-bell', 'glass-bells', 'music-box', 'flute', 'celesta', 'pluck'], pad: ['dark-pad', 'choir', 'slow-strings'],
       arp: ['pluck', 'music-box', 'fm-bell'], texture: ['vinyl', 'riser'],
     },
     bassStyles: ['follow-kick', 'glide'], chordStyles: ['block', 'half', 'swell'], bassKickLock: 0.85,
@@ -202,7 +202,7 @@ export const GENRES: Record<GenreId, Genre> = {
     },
     roles: {
       drums: ['house-kit'], bass: ['fm-bass', 'synth-bass-1', 'rubber-bass', 'sub-bass'], chords: ['grand-piano', 'electric-piano', 'jazz-organ', 'dx-piano'],
-      lead: ['pluck', 'vibrato-lead', 'voice-lead', 'fm-bell'], pad: ['warm-pad', 'string-machine'], arp: ['pluck', 'square-pluck'], texture: ['riser'],
+      lead: ['pluck', 'vibrato-lead', 'fm-bell', 'electric-piano'], pad: ['warm-pad', 'string-machine'], arp: ['pluck', 'square-pluck'], texture: ['riser'],
     },
     bassStyles: ['offbeat', 'pulse8'], chordStyles: ['stab', 'pulse', 'eighths'], bassKickLock: 0.05,
     melodyDensity: [2, 6], repetition: [0.7, 0.95],
@@ -225,7 +225,7 @@ export const GENRES: Record<GenreId, Genre> = {
     },
     roles: {
       drums: ['electro-kit', 'studio-kit'], bass: ['synth-bass-1', 'bass-lead', 'fm-bass'], chords: ['polysynth-pad', 'string-machine', 'dx-piano', 'synth-brass'],
-      lead: ['saw-lead', 'vibrato-lead', 'charang-lead', 'square-lead'], pad: ['warm-pad', 'string-machine', 'pwm-pad'], arp: ['pluck', 'square-pluck', 'dx-piano'], texture: ['riser'],
+      lead: ['saw-lead', 'vibrato-lead', 'square-lead'], pad: ['warm-pad', 'string-machine', 'pwm-pad'], arp: ['pluck', 'square-pluck', 'dx-piano'], texture: ['riser'],
     },
     bassStyles: ['pulse8', 'roots'], chordStyles: ['block', 'half', 'swell'], bassKickLock: 0.4,
     melodyDensity: [2, 6], repetition: [0.55, 0.85],
@@ -249,7 +249,7 @@ export const GENRES: Record<GenreId, Genre> = {
     },
     roles: {
       drums: ['lofi-kit', 'brush-kit'], bass: ['electric-bass', 'upright-bass', 'fretless-bass'], chords: ['electric-piano', 'tine-keys', 'grand-piano', 'vibraphone'],
-      lead: ['vibraphone', 'jazz-guitar', 'flute', 'kalimba', 'music-box'], pad: ['warm-pad', 'rain-pad'], arp: ['kalimba', 'jazz-guitar', 'harp'], texture: ['vinyl', 'rain-pad'],
+      lead: ['vibraphone', 'jazz-guitar', 'flute', 'kalimba', 'music-box'], pad: ['warm-pad'], arp: ['kalimba', 'jazz-guitar', 'harp'], texture: ['vinyl', 'rain-pad'],
     },
     bassStyles: ['roots', 'follow-kick', 'walking'], chordStyles: ['block', 'half', 'arp8'], bassKickLock: 0.55,
     melodyDensity: [1.5, 5], repetition: [0.55, 0.85],
@@ -290,8 +290,8 @@ export const GENRES: Record<GenreId, Genre> = {
       ],
     },
     roles: {
-      drums: ['electro-kit'], bass: ['square-pluck', 'bass-lead', 'chip-lead'], chords: ['chip-lead', 'square-pluck'],
-      lead: ['chip-lead', 'square-lead', 'calliope-lead'], pad: ['square-lead'], arp: ['chip-lead', 'square-pluck'], texture: ['laser-zap'],
+      drums: ['electro-kit'], bass: ['bass-lead', 'synth-bass-1'], chords: ['square-pluck', 'chip-lead'],
+      lead: ['chip-lead', 'square-lead', 'calliope-lead'], arp: ['square-pluck', 'chip-lead', 'calliope-lead'], texture: ['laser-zap'],
     },
     bassStyles: ['pulse8', 'arp', 'roots'], chordStyles: ['arp', 'stab'], bassKickLock: 0.4,
     melodyDensity: [4, 9], repetition: [0.45, 0.75],

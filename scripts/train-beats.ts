@@ -24,7 +24,9 @@ const GENS = Number(process.env.GENS ?? 24);
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-')) as GenreId[];
 const fresh = process.argv.includes('--fresh');
 
-const memory: Memory = !fresh && existsSync(OUT) ? (JSON.parse(readFileSync(OUT, 'utf8')).memory ?? {}) : {};
+const memory: Memory = existsSync(OUT) ? (JSON.parse(readFileSync(OUT, 'utf8')).memory ?? {}) : {};
+// --fresh starts the chosen styles (or all of them) from nothing; the others keep what they learned
+if (fresh) for (const g of GENRE_LIST) if (!only.length || only.includes(g.id)) delete memory[g.id];
 
 /** Average score of beats made with no memory at all: the baseline that training must beat. */
 function baseline(genre: GenreId, n = 200): number {

@@ -87,7 +87,25 @@ function answerOf(motif: Genome['motif'], kind: Answer): Genome['motif'] {
   return out;
 }
 
-const shouldPlay = (section: SectionSpan, role: Role) => section.roles.includes(role);
+/**
+ * Which parts really play in a section. Less is more: producers keep one melodic voice in
+ * front, so a melody and an arpeggio do not both play at full level (the arpeggio stays
+ * only as a quiet background in club music), and a separate pad is left out when the
+ * chords are already played by a sustained pad sound.
+ */
+export function playingRoles(section: SectionSpan, g: Genome): Set<Role> {
+  const genre = GENRES[g.genre];
+  const roles = new Set(section.roles.filter((r) => g.inst[r] && genre.roles[r]?.length));
+  if (roles.has('lead') && roles.has('arp')) {
+    const background = genre.family === 'electronic' && (section.name === 'drop' || section.name === 'hook');
+    if ((g.focus ?? 'lead') === 'arp') roles.delete('lead');
+    else if (!background) roles.delete('arp');
+  }
+  const chordsDef = getInstrument(g.inst.chords);
+  if (roles.has('pad') && roles.has('chords') && chordsDef?.sustain) roles.delete('pad');
+  return roles;
+}
+const shouldPlay = (section: SectionSpan, role: Role, g?: Genome) => (g ? playingRoles(section, g).has(role) : section.roles.includes(role));
 
 export function sectionsFor(g: Genome, length: Length): SectionSpan[] {
   const genre = GENRES[g.genre];
@@ -128,7 +146,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
       const lastOfPhrase = b % 2 === 1;
 
       // ---- drums ----
-      if (g.drums && g.inst.drums && shouldPlay(sec, 'drums')) {
+      if (g.drums && g.inst.drums && shouldPlay(sec, 'drums', g)) {
         const d = g.drums;
         const half = (b % 2) * 16;
         const sparse = sec.energy < 0.5;
@@ -185,7 +203,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
       }
 
       // ---- bass ----
-      if (g.inst.bass && shouldPlay(sec, 'bass')) {
+      if (g.inst.bass && shouldPlay(sec, 'bass', g)) {
         const range = rangeOf('bass');
         const root = fit(12 * (g.bassOct + 1) + chord.rootPc, range);
         const fifth = fit(root + 7, range);
@@ -226,7 +244,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
 
       // ---- chords and pad ----
       const vChord = voice(chord, g.chordOct, g.voicing, (notes.chords ?? []).length ? (notes.chords ?? []).slice(-4).map((n) => n.pitch) : null).map((p) => fit(p, rangeOf('chords')));
-      if (g.inst.chords && shouldPlay(sec, 'chords')) {
+      if (g.inst.chords && shouldPlay(sec, 'chords', g)) {
         const hit = (at: number, dur: number, vel: number) => vChord.forEach((p) => add('chords', p, t0 + at, dur, vel * vScale));
         switch (g.chordStyle) {
           case 'block': hit(0, 3.9, 0.62); break;
@@ -242,11 +260,15 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
           }
         }
       }
-      if (g.inst.pad && shouldPlay(sec, 'pad') && b % 2 === 0) {
+      const prevChord = b > 0 ? chords[bar - 1] : null;
+      if (g.inst.pad && shouldPlay(sec, 'pad', g) && (b === 0 || !prevChord || prevChord.rootPc !== chord.rootPc || prevChord.quality !== chord.quality || b % 4 === 0)) {
+        // a held chord that lasts exactly as long as the harmony does (it used to ring over the next chord)
+        let bars = 1;
+        while (b + bars < sec.bars && (b + bars) % 4 !== 0 && chords[bar + bars].rootPc === chord.rootPc && chords[bar + bars].quality === chord.quality) bars++;
         const range = rangeOf('pad');
-        voice(chord, g.chordOct, 'triad', null).map((p) => fit(p + 12, range)).forEach((p) => add('pad', p, t0, Math.min(8, (sec.bars - b) * 4) - 0.1, 0.48 * vScale));
+        voice(chord, g.chordOct, 'triad', null).map((p) => fit(p + 12, range)).forEach((p) => add('pad', p, t0, bars * 4 - 0.1, 0.48 * vScale));
       }
-      if (g.inst.arp && shouldPlay(sec, 'arp')) {
+      if (g.inst.arp && shouldPlay(sec, 'arp', g)) {
         const range = rangeOf('arp');
         const pool = [...vChord.map((p) => p + 12), vChord[0] + 24].map((p) => fit(p, range)).sort((a, z) => a - z);
         const order = g.arp === 'up' ? pool : g.arp === 'down' ? [...pool].reverse() : g.arp === 'updown' ? [...pool, ...pool.slice(1, -1).reverse()] : [pool[0], pool[2] ?? pool[0], pool[1], pool[3] ?? pool[1]];
@@ -255,7 +277,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
       }
 
       // ---- melody: the motif, then its answer, as a four-bar phrase ----
-      if (g.inst.lead && shouldPlay(sec, 'lead') && b % 2 === 0) {
+      if (g.inst.lead && shouldPlay(sec, 'lead', g) && b % 2 === 0) {
         const range = rangeOf('lead');
         const phrasePos = b % 4; // 0: motif, 2: answer
         const last8 = b + 2 >= sec.bars && sec.bars >= 8;
@@ -277,7 +299,7 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
 
     // ---- texture: once per section ----
     const tex = g.inst.texture;
-    if (tex && shouldPlay(sec, 'texture')) {
+    if (tex && shouldPlay(sec, 'texture', g)) {
       const t0 = sec.startBar * BAR, len = sec.bars * BAR;
       if (tex === 'riser') {
         const next = sections[sections.indexOf(sec) + 1];
@@ -301,7 +323,8 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
     const id = g.inst[role];
     const ns = notes[role];
     if (!id || !ns?.length) continue;
-    parts.push({ role, instrumentId: id, notes: ns, volume: volumeFor(g, role, id, ns), pan: role === 'arp' ? 0.25 : role === 'pad' ? -0.15 : role === 'texture' ? 0.1 : 0, fx: fxFor(g, role) });
+    const featured = notes.lead?.length ? 'lead' : notes.arp?.length ? 'arp' : null;
+    parts.push({ role, instrumentId: id, notes: ns, volume: volumeFor(g, role, id, ns, featured), pan: role === 'arp' ? 0.25 : role === 'pad' ? -0.15 : role === 'texture' ? 0.1 : 0, fx: fxFor(g, role) });
   }
   return { genome: g, bpm: g.bpm, key: { root: g.root, scale: g.scale }, lengthBars, sections, chords, parts };
 }
@@ -310,10 +333,24 @@ export function compose(g: Genome, length: Length = 'loop'): Composition {
  * Gain staging, as an engineer would do it: the fader that brings this part to the level
  * the style wants, from the measured loudness of the instrument and how much it plays.
  */
-export function volumeFor(g: Genome, role: Role, instrumentId: string, notes: Note[]): number {
+/**
+ * How loud a part should be, in dB relative to the style's reference. The featured voice
+ * sits clearly above whatever plays behind it. `nudges` adds the genome's own level tweaks.
+ */
+export function roleTarget(g: Genome, role: Role, featured: 'lead' | 'arp' | null, nudges = true): number {
   const genre = GENRES[g.genre];
+  const level = (r: Role) => (genre.levels[r] ?? -10) + (nudges ? g.levels[r] ?? 0 : 0);
+  let target = level(role);
+  if (role === 'arp' && featured === 'lead') target = Math.min(target, level('lead') - 6);
+  if (role === 'lead' && featured === 'arp') target = Math.min(target, level('arp') - 6);
+  if (role === 'pad' && g.inst.chords) target = Math.min(target, level('chords') - 4);
+  if (role === featured) target = Math.max(target, Math.max(level('chords'), level('pad')) + 2);
+  return target;
+}
+
+export function volumeFor(g: Genome, role: Role, instrumentId: string, notes: Note[], featured: 'lead' | 'arp' | null = null): number {
   const typical = partLoudness(instrumentId, notes, g.bpm);
-  const want = ANCHOR + (genre.levels[role] ?? -10) + (g.levels[role] ?? 0);
+  const want = ANCHOR + roleTarget(g, role, featured);
   return Math.round(Math.max(-36, Math.min(6, want - typical)) * 2) / 2;
 }
 

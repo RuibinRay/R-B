@@ -1,6 +1,6 @@
 import type { Note } from '../../types';
 import { SCALES } from '../music';
-import type { Composition, Part } from './compose';
+import { roleTarget, type Composition, type Part } from './compose';
 import { BANDS, GENRES, HIT_P, type Role } from './knowledge';
 import { noteProfile } from './profiles';
 
@@ -198,10 +198,12 @@ export function review(c: Composition): Review {
   const loudest = Math.max(...Object.values(est.roleDb).map((v) => v ?? -99));
   const devs: string[] = [];
   let dev = 0, counted = 0;
+  const featured = partOf(c, 'lead') ? 'lead' : partOf(c, 'arp') ? 'arp' : null;
+  const wantOf = (r: Role) => (genre.levels[r] === undefined ? undefined : roleTarget(g, r, featured, false));
   for (const [role, db] of Object.entries(est.roleDb) as [Role, number][]) {
-    const want = genre.levels[role];
+    const want = wantOf(role);
     if (want === undefined) continue;
-    const top = Math.max(...(Object.keys(est.roleDb) as Role[]).map((r) => genre.levels[r] ?? -99));
+    const top = Math.max(...(Object.keys(est.roleDb) as Role[]).map((r) => wantOf(r) ?? -99));
     const d = (db - loudest) - (want - top);
     dev += Math.min(12, Math.abs(d)); counted++;
     if (Math.abs(d) > 4) devs.push(`${role} ${d > 0 ? '+' : ''}${Math.round(d)} dB`);
@@ -229,6 +231,27 @@ export function review(c: Composition): Review {
     const corr = da && db ? num / Math.sqrt(da * db) : 0;
     const contrast = Math.max(...got) - Math.min(...got);
     add('arrangement', 'Arrangement', 0.7 * clamp01((corr + 0.2) / 1.2) + 0.3 * within(contrast, 4, 14, 6), 1, `energy follows the plan ${pct(clamp01(corr))}; ${contrast.toFixed(0)} dB from quietest to loudest section`);
+  }
+
+  // 16. clarity: one melodic idea in front, few layers at once, no sound used twice
+  {
+    const melodic = c.parts.filter((p) => p.role === 'chords' || p.role === 'pad' || p.role === 'lead' || p.role === 'arp');
+    const sounding = new Map<number, Set<Role>>();
+    for (const p of melodic) for (const n of p.notes) {
+      for (let t = Math.round(n.start * 2); t < Math.max(Math.round(n.start * 2) + 1, Math.round((n.start + n.duration) * 2)); t++) (sounding.get(t) ?? sounding.set(t, new Set()).get(t)!).add(p.role);
+    }
+    const counts = [...sounding.values()].map((s) => s.size);
+    const avg = counts.length ? counts.reduce((a, b) => a + b, 0) / counts.length : 0;
+    const both = partOf(c, 'lead') && partOf(c, 'arp') && (est.roleDb.arp ?? -99) > (est.roleDb.lead ?? -99) - 4;
+    const ids = melodic.map((p) => p.instrumentId);
+    const doubled = ids.length - new Set(ids).size;
+    const front = featured ? (est.roleDb[featured] ?? -99) - Math.max(...melodic.filter((p) => p.role !== featured).map((p) => est.roleDb[p.role] ?? -99), -99) : 0;
+    const score = 0.4 * within(avg, 1, 2.6, 1.2) + 0.2 * (both ? 0 : 1) + 0.2 * (doubled ? 0 : 1) + 0.2 * within(front, 0, 30, 6);
+    const notes: string[] = [`${avg.toFixed(1)} melodic parts sound at once`];
+    if (both) notes.push('melody and arpeggio compete at the same level');
+    if (doubled) notes.push('the same sound is used for two parts');
+    if (featured && front < 0) notes.push(`the ${featured === 'lead' ? 'melody' : 'arpeggio'} is ${Math.round(-front)} dB below the accompaniment`);
+    add('clarity', 'Clarity', score, 1.3, notes.join('; '));
   }
 
   // 13. drum dynamics: accents and soft notes, as the drum programming guides teach

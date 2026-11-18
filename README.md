@@ -133,7 +133,7 @@ on recordings, and it says so on the page. It works in four layers:
    prediction error fell from 0.37 (uncalibrated) to 0.28 after the first round and 0.24 after the
    second, and the median level error fell from 2.3 dB to 0.9 dB. The page also measures the real
    audio (loudness, peak, spectrum against the style) of every beat you play.
-3. **Fifteen critics** (`critics.ts`) judge each beat from 0 to 1, with a reason: tempo for the style,
+3. **Sixteen critics** (`critics.ts`) judge each beat from 0 to 1, with a reason: tempo for the style,
    drum groove against the style's templates and backbeat, kick and bass (locked together for trap,
    kept apart for house), notes in key and melody on chord tones, semitone clashes and muddy low
    notes, melody shape (steps, leaps that recover, range, density), repetition against variation,
@@ -150,6 +150,23 @@ on recordings, and it says so on the page. It works in four layers:
    same beat is recorded, also for instrument pairs. New beats are drawn with a preference for what
    measured well. Your thumbs-up and thumbs-down are recorded per decision too, so it drifts towards
    your taste. The page shows what it has learned per style.
+
+**Fixes after listening reports** ("some beats are terrible"): an audit of the beats it served
+found four causes, now fixed and covered by tests. Every loop stacked four melodic layers at once
+(chords, pad, melody and a constant arpeggio); now one melodic voice is featured (a melody or an
+arpeggio, never both at full level; club styles may keep the arpeggio quietly behind the melody),
+and no separate pad plays when the chords are already a pad sound. Pads held a chord over the next
+chord change, which clashed; they now last exactly as long as the harmony. Melodies were often
+quieter than the arpeggio or chords; the featured voice is now set at least 2 dB above the
+accompaniment. Some beats used the same sound for two parts, or odd ones (a lead sound as a pad);
+those choices are gone. Melodies are also written more like the melody guides suggest: three to
+ten notes over two bars, chord tones on the beat, within about an octave, with the last beat left
+free for the answer. A sixteenth critic, clarity, checks all of this. Audit of 108 beats as served (top beats
+of three searches per style), before and after: melodic layers playing at once 4.0 → 2.3, melody
+and arpeggio together 108 → 0, pad chords ringing over a chord change 648 of 1,296 → 0 of 486,
+featured voice quieter than its accompaniment 59 → 0, same sound on two parts 18 → 0. The old
+critics scored those beats almost the same (0.968) because none of them checked for these
+problems, which is why listening reports matter.
 
 **Production techniques from tutorials** (built into the composer, from the sources listed below):
 hi-hats accented on the beat, medium on the off-beat and soft in between; a few milliseconds of
